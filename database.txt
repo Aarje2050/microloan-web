@@ -1,0 +1,28 @@
+### 🔐 AUTHENTICATION FLOWS:
+```
+Super Admin: Login → Immediate access (no verification needed)
+Borrower: Register → Email verification → Login  
+Lender: Register → Email verification → Admin approval → Login
+```
+
+---
+
+## 🗄️ DATABASE ARCHITECTURE
+
+### Core Tables (PostgreSQL + Supabase):
+```sql
+users (id, email, role, phone, full_name, active, email_verified, pending_approval)
+user_profiles (user_id, avatar_url, address, kyc_status)
+borrowers (user_id, lender_id, credit_score, employment_type, monthly_income)
+loans (borrower_id, loan_number, principal_amount, interest_rate, tenure_months, status)
+emis (loan_id, emi_number, due_date, amount, status, paid_amount)
+payments (loan_id, amount, payment_date, payment_method, recorded_by)
+documents (borrower_id, document_type, file_url, verification_status)
+```
+
+### 🔥 CRITICAL DATABASE RULES:
+- **ID Matching**: `auth.users.id` MUST match `users.id` (foreign key dependencies)
+- **RLS Policies**: Use roles `anon`, `authenticated`, `service_role` (NOT `public`)
+- **No Recursive Queries**: RLS policies must NEVER query same table they're applied to
+- **Service Functions**: Use `SECURITY DEFINER` functions to bypass RLS when needed
+

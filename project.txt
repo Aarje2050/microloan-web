@@ -1,0 +1,238 @@
+src
+├── app
+│   ├── (auth)
+│   │   ├── layout.tsx
+│   │   ├── login
+│   │   │   └── page.tsx
+│   │   └── register
+│   │       └── page.tsx
+│   ├── api
+│   │   ├── auth
+│   │   └── webhooks
+│   ├── auth
+│   │   ├── admin
+│   │   ├── borrower
+│   │   └── lender
+│   ├── dashboard
+│   │   ├── admin
+│   │   │   └── dashboard.tsx
+│   │   ├── borrower
+│   │   │   └── dashboard.tsx
+│   │   ├── lender
+│   │   │   └── dashboard.tsx
+│   │   └── page.tsx
+│   ├── error.tsx
+│   ├── favicon.ico
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── loading.tsx
+│   ├── not-found.tsx
+│   ├── page.tsx
+│   └── providers.tsx
+├── assets
+│   ├── docs
+│   ├── fonts
+│   └── images
+│       ├── icons
+│       ├── illustrations
+│       └── logos
+├── components
+│   ├── common
+│   ├── features
+│   │   ├── analytics
+│   │   ├── auth
+│   │   ├── dashboard
+│   │   ├── index.ts
+│   │   ├── loans
+│   │   └── users
+│   ├── forms
+│   │   ├── auth
+│   │   ├── index.ts
+│   │   ├── loan
+│   │   └── user
+│   ├── layout
+│   │   ├── dashboard-layout.tsx
+│   │   ├── desktop-sidebar.tsx
+│   │   ├── index.ts
+│   │   └── mobile-navigation.tsx
+│   └── ui
+│       ├── badge.tsx
+│       ├── button.tsx
+│       ├── card.tsx
+│       ├── index.ts
+│       ├── input.tsx
+│       ├── loading.tsx
+│       ├── stats-card.tsx
+│       └── toast.tsx
+├── lib
+│   ├── api
+│   │   ├── analytics
+│   │   ├── loans
+│   │   └── users
+│   ├── auth
+│   │   └── index.ts
+│   ├── constants
+│   │   ├── app-config.ts
+│   │   ├── permissions.ts
+│   │   └── routes.ts
+│   ├── hooks
+│   │   └── index.ts
+│   ├── stores
+│   │   └── auth-store.ts
+│   ├── supabase.ts
+│   ├── types
+│   │   └── index.ts
+│   ├── utils
+│   │   └── index.ts
+│   └── utils.ts
+├── middleware.ts
+├── styles
+│   └── themes
+└── types
+    ├── database.ts
+    └── index.ts
+
+
+## INITIAL PROJECT INFORMATION - We wrote this when we started our project , so you can take reference for initial planning and goals 
+
+# 🏦 MicroLoan Manager - Enterprise Web Application
+## Complete Project Summary & Technical Documentation
+
+---
+
+## 🎯 **PROJECT OVERVIEW**
+
+**MicroLoan Manager** is an enterprise-grade microloan management platform designed as a **mobile-first web application** that provides native app-like experience without App Store dependencies. The system serves three distinct user roles with comprehensive loan lifecycle management.
+
+### **Core Business Model:**
+- **Super Admin**: System owner managing lenders and overall operations
+- **Lenders**: Loan officers creating borrowers, managing loans, tracking payments
+- **Borrowers**: Customers viewing loans, EMI schedules, making payments
+
+### **Key Business Requirements:**
+- Mobile-first design with native app feeling
+- Role-based access control with enterprise security
+- Real-time EMI calculations and payment tracking
+- Document management for KYC compliance
+- Comprehensive analytics and reporting
+- PWA capabilities for mobile installation
+
+---
+
+## 🏗️ **CURRENT TECHNICAL STACK**
+
+### **Frontend Architecture:**
+- **Next.js 14** with App Router (TypeScript strict mode)
+- **Tailwind CSS** with custom enterprise design system
+- **Zustand** for lightweight state management
+- **TanStack Query (React Query v5)** for server state
+- **React Hook Form + Zod** for forms and validation
+- **Lucide React** for consistent iconography
+- **Radix UI** for accessible component primitives
+
+### **Backend & Database:**
+- **Supabase** (PostgreSQL + Authentication + Real-time)
+- **Row Level Security (RLS)** for database-level security
+- **JWT Authentication** with automatic token refresh
+- **Real-time subscriptions** for live data updates
+
+### **Development & Quality:**
+- **TypeScript** throughout for type safety
+- **ESLint + Prettier** for code quality
+- **Tailwind CSS** for responsive design
+- **PWA Support** for mobile app installation
+- **Enterprise directory structure** for team scalability
+
+---
+
+## 🗄️ **DATABASE ARCHITECTURE & STATUS**
+
+### **Current Database Schema (PostgreSQL via Supabase):**
+
+#### **Core Tables:**
+```sql
+users (7 columns)
+├── id (UUID, Primary Key)
+├── email (VARCHAR, Unique)
+├── role (ENUM: super_admin, lender, borrower)
+├── phone (VARCHAR, Unique)
+├── full_name (VARCHAR)
+├── active (BOOLEAN)
+├── email_verified (BOOLEAN)
+├── pending_approval (BOOLEAN)
+├── created_at/updated_at/deleted_at (Timestamps)
+
+user_profiles (5 columns)
+├── id (UUID, Primary Key)
+├── user_id (UUID, Foreign Key → users.id)
+├── avatar_url (TEXT, Optional)
+├── address (TEXT, Optional)
+├── kyc_status (ENUM: pending, verified, rejected)
+
+borrowers (7 columns)
+├── id (UUID, Primary Key)
+├── user_id (UUID, Foreign Key → users.id)
+├── lender_id (UUID, Foreign Key → users.id)
+├── credit_score (INTEGER, 300-850)
+├── employment_type (VARCHAR)
+├── monthly_income (DECIMAL)
+├── created_at/updated_at/deleted_at
+
+loans (11 columns)
+├── id (UUID, Primary Key)
+├── borrower_id (UUID, Foreign Key → borrowers.id)
+├── loan_number (VARCHAR, Unique, Auto-generated)
+├── principal_amount (DECIMAL)
+├── interest_rate (DECIMAL, 0-100%)
+├── tenure_months (INTEGER, 1-360)
+├── status (ENUM: pending_approval, active, completed, defaulted)
+├── approved_by/approved_at/disbursed_at
+├── created_at/updated_at/deleted_at
+
+emis (8 columns)
+├── id (UUID, Primary Key)
+├── loan_id (UUID, Foreign Key → loans.id)
+├── emi_number (INTEGER)
+├── due_date (DATE)
+├── amount (DECIMAL)
+├── status (ENUM: pending, paid, overdue, partially_paid)
+├── paid_date/paid_amount
+├── created_at/updated_at
+
+payments (8 columns)
+├── id (UUID, Primary Key)
+├── loan_id (UUID, Foreign Key → loans.id)
+├── amount (DECIMAL)
+├── payment_date (DATE)
+├── payment_method (ENUM: cash, bank_transfer, upi, cheque)
+├── reference_number/notes
+├── recorded_by (UUID, Foreign Key → users.id)
+├── created_at/updated_at
+
+documents (7 columns)
+├── id (UUID, Primary Key)
+├── borrower_id (UUID, Foreign Key → borrowers.id)
+├── document_type (ENUM: aadhar, pan, salary_slip, bank_statement, photo)
+├── file_url (TEXT)
+├── verification_status (ENUM: pending, verified, rejected)
+├── verified_by/verified_at
+├── created_at/updated_at
+```
+
+#### **Database Features Implemented:**
+- ✅ **Row Level Security (RLS)** enabled on all tables
+- ✅ **Email verification workflow** with approval process
+- ✅ **Admin approval system** for lenders
+- ✅ **Soft deletes** with audit trails
+- ✅ **Auto-timestamps** and user tracking
+- ✅ **Foreign key relationships** with cascade deletes
+- ✅ **Database functions** for complex operations
+- ✅ **Real-time subscriptions** ready
+- ✅ **Indexed queries** for performance
+
+#### **Current Database State:**
+- **Clean database** with only super admin user
+- **Super Admin Credentials**: `aarje2050@gmail.com` / `Rajesh@321`
+- **Email verification** working via Supabase
+- **RLS policies** tested and functional
+- **No test data pollution**
