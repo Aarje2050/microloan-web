@@ -1,4 +1,4 @@
-// components/forms/add-borrower-form.tsx - FIXED VALIDATION
+// components/forms/add-borrower-form.tsx - ENHANCED FOR MULTI-TENANT
 'use client'
 
 import React from 'react'
@@ -32,6 +32,15 @@ interface DocumentFile {
   preview?: string
 }
 
+// 🆕 ENHANCED: Multi-tenant email validation interface
+interface EmailValidation {
+  checking: boolean
+  status: 'new' | 'existing_available' | 'existing_assigned' | 'error'
+  message: string
+  user_id?: string
+  can_proceed: boolean
+}
+
 export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerFormProps) {
   const { user } = useAuth()
   
@@ -40,11 +49,14 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
   const [error, setError] = React.useState('')
   const [success, setSuccess] = React.useState('')
   const [currentStep, setCurrentStep] = React.useState(1)
-  const [emailValidation, setEmailValidation] = React.useState<{
-    checking: boolean
-    exists: boolean
-    error: string
-  }>({ checking: false, exists: false, error: '' })
+  
+  // 🆕 ENHANCED: Multi-tenant email validation state
+  const [emailValidation, setEmailValidation] = React.useState<EmailValidation>({
+    checking: false,
+    status: 'new',
+    message: '',
+    can_proceed: true
+  })
   
   const [formData, setFormData] = React.useState<FormData>({
     full_name: '',
@@ -65,44 +77,104 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
 
   console.log('📝 ADD BORROWER - Component loaded for lender:', user?.email)
 
-  // Real-time email validation
+  // 🆕 ENHANCED: Multi-tenant email validation
   const checkEmailExists = React.useCallback(async (email: string) => {
     if (!email || !email.includes('@')) {
-      setEmailValidation({ checking: false, exists: false, error: '' })
+      setEmailValidation({
+        checking: false,
+        status: 'new',
+        message: '',
+        can_proceed: true
+      })
       return
     }
 
-    console.log('🔍 EMAIL CHECK - Checking email:', email)
-    setEmailValidation({ checking: true, exists: false, error: '' })
+    console.log('🔍 ENHANCED EMAIL CHECK - Checking email:', email)
+    setEmailValidation({
+      checking: true,
+      status: 'new',
+      message: 'Checking email...',
+      can_proceed: false
+    })
 
     try {
-      // Check if email exists in users table
-      const { data, error } = await supabase
+      // Step 1: Check if user exists
+      const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('email')
+        .select('id, email, full_name, role, active')
         .eq('email', email.toLowerCase().trim())
-        .limit(1)
+        .single()
 
-      if (error) {
-        console.error('❌ EMAIL CHECK - Error:', error)
-        setEmailValidation({ checking: false, exists: false, error: 'Unable to validate email' })
+      if (userError && userError.code !== 'PGRST116') {
+        console.error('❌ EMAIL CHECK - User query error:', userError)
+        setEmailValidation({
+          checking: false,
+          status: 'error',
+          message: 'Unable to validate email',
+          can_proceed: false
+        })
         return
       }
 
-      const exists = data && data.length > 0
-      console.log('📋 EMAIL CHECK - Result:', { exists, count: data?.length })
-      
-      setEmailValidation({ 
-        checking: false, 
-        exists: exists, 
-        error: exists ? 'Email already exists' : '' 
+      // Case 1: New user (doesn't exist)
+      if (!userData) {
+        console.log('✅ EMAIL CHECK - New email, can create user')
+        setEmailValidation({
+          checking: false,
+          status: 'new',
+          message: 'New borrower - will create account',
+          can_proceed: true
+        })
+        return
+      }
+
+      console.log('📋 EMAIL CHECK - User found:', userData.id, userData.full_name)
+
+      // Step 2: Check if already your borrower
+      const { data: borrowerRelation, error: borrowerError } = await supabase
+        .from('borrowers')
+        .select('id')
+        .eq('user_id', userData.id)
+        .eq('lender_id', user?.id)
+        .single()
+
+      if (borrowerError && borrowerError.code !== 'PGRST116') {
+        console.error('❌ EMAIL CHECK - Borrower query error:', borrowerError)
+      }
+
+      // Case 2: Already your borrower
+      if (borrowerRelation) {
+        console.log('ℹ️ EMAIL CHECK - Already your borrower')
+        setEmailValidation({
+          checking: false,
+          status: 'existing_assigned',
+          message: `${userData.full_name} is already your borrower - create loans for them instead`,
+          user_id: userData.id,
+          can_proceed: false
+        })
+        return
+      }
+
+      // Case 3: User exists but not your borrower (MULTI-TENANT!)
+      console.log('✅ EMAIL CHECK - Can add existing user as your borrower')
+      setEmailValidation({
+        checking: false,
+        status: 'existing_available',
+        message: `${userData.full_name} exists - will add as your borrower`,
+        user_id: userData.id,
+        can_proceed: true
       })
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('💥 EMAIL CHECK - Exception:', error)
-      setEmailValidation({ checking: false, exists: false, error: 'Unable to validate email' })
+      setEmailValidation({
+        checking: false,
+        status: 'error',
+        message: 'Unable to validate email',
+        can_proceed: false
+      })
     }
-  }, [])
+  }, [user?.id])
 
   // Debounced email check
   React.useEffect(() => {
@@ -141,7 +213,7 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
     }))
   }
 
-  // Simplified validation - only name and email required
+  // 🆕 ENHANCED: Updated validation for multi-tenant
   const validateStep1 = () => {
     if (!formData.full_name.trim()) return 'Full name is required'
     if (!formData.email.trim()) return 'Email is required'
@@ -150,9 +222,14 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) return 'Valid email format required'
     
-    // Check if email exists
-    if (emailValidation.exists) return 'Email already exists in system'
+    // Check validation status
     if (emailValidation.checking) return 'Please wait while we validate email...'
+    if (!emailValidation.can_proceed) {
+      if (emailValidation.status === 'existing_assigned') {
+        return 'This person is already your borrower. Go to Create Loan instead.'
+      }
+      return emailValidation.message
+    }
     
     // Phone validation only if provided
     if (formData.phone.trim()) {
@@ -174,8 +251,6 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
     
     return null
   }
-
-  
 
   // Step navigation
   const handleNextStep = () => {
@@ -227,9 +302,42 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
     }
   }
 
-  // Main form submission
+  // 🆕 ENHANCED: Helper for existing user scenario
+  const handleExistingUserScenario = async (borrowerUserId: string) => {
+    console.log('📝 SCENARIO B - Adding existing user as borrower')
+    
+    // Update user roles to include borrower (if needed)
+    const { error: roleUpdateError } = await supabase
+      .from('users')
+      .update({
+        roles: ['borrower'] // Ensure borrower role exists
+      })
+      .eq('id', borrowerUserId)
+      .is('roles', null)
+
+    if (roleUpdateError) {
+      console.warn('⚠️ Role update warning:', roleUpdateError)
+    }
+
+    // Update profile with any new info provided
+    if (formData.address.trim()) {
+      const { error: profileUpdateError } = await supabase
+        .from('user_profiles')
+        .upsert({
+          user_id: borrowerUserId,
+          address: formData.address,
+          kyc_status: 'pending'
+        })
+
+      if (profileUpdateError) {
+        console.warn('⚠️ Profile update warning:', profileUpdateError)
+      }
+    }
+  }
+
+  // 🆕 ENHANCED: Multi-tenant form submission
   const handleSubmit = async () => {
-    console.log('🚀 ADD BORROWER - Form submission started')
+    console.log('🚀 ENHANCED SUBMIT - Starting with status:', emailValidation.status)
     
     // Final validation
     const step1Error = validateStep1()
@@ -243,67 +351,83 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
       return
     }
 
+    if (!emailValidation.can_proceed) {
+      setError('Please resolve email validation issues first')
+      return
+    }
+
     setIsLoading(true)
     setError('')
 
     try {
-      console.log('📝 ADD BORROWER - Creating borrower user account...')
-      
-      // Step 1: Create auth user for borrower
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email.toLowerCase().trim(),
-        password: 'TempPassword123!', // Will be changed on first login
-        options: {
-          data: {
-            full_name: formData.full_name,
-            role: 'borrower'
-          }
-        }
-      })
+      let borrowerUserId = emailValidation.user_id
 
-      if (authError) throw authError
-      if (!authData.user) throw new Error('Failed to create user account')
-
-      const borrowerUserId = authData.user.id
-      console.log('✅ ADD BORROWER - Auth user created:', borrowerUserId)
-
-      // Step 2: Insert into users table
-      console.log('📝 ADD BORROWER - Creating user record...')
-      const { error: userError } = await supabase
-        .from('users')
-        .insert({
-          id: borrowerUserId,
+      // SCENARIO A: New user - create everything (existing logic)
+      if (emailValidation.status === 'new') {
+        console.log('📝 SCENARIO A - Creating new user and borrower')
+        
+        // Create auth user
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email.toLowerCase().trim(),
-          role: 'borrower',
-          phone: formData.phone || '',
-          full_name: formData.full_name,
-          active: true,
-          email_verified: false,
-          pending_approval: false
+          password: 'TempPassword123!', // Will be changed on first login
+          options: {
+            data: {
+              full_name: formData.full_name,
+              role: 'borrower'
+            }
+          }
         })
 
-      if (userError) throw userError
-      console.log('✅ ADD BORROWER - User record created')
+        if (authError) throw authError
+        if (!authData.user) throw new Error('Failed to create user account')
+        borrowerUserId = authData.user.id
 
-      // Step 3: Create user profile (optional fields)
-      console.log('📝 ADD BORROWER - Creating user profile...')
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .insert({
-          user_id: borrowerUserId,
-          address: formData.address || null,
-          kyc_status: 'pending'
-        })
+        console.log('✅ ADD BORROWER - Auth user created:', borrowerUserId)
 
-      if (profileError) {
-        console.warn('⚠️ ADD BORROWER - Profile creation failed:', profileError)
-        // Don't fail for profile errors
-      } else {
-        console.log('✅ ADD BORROWER - User profile created')
+        // Step 2: Insert into users table
+        console.log('📝 ADD BORROWER - Creating user record...')
+        const { error: userError } = await supabase
+          .from('users')
+          .insert({
+            id: borrowerUserId,
+            email: formData.email.toLowerCase().trim(),
+            role: 'borrower',
+            roles: ['borrower'], // 🆕 Multi-role support
+            phone: formData.phone || '',
+            full_name: formData.full_name,
+            active: true,
+            email_verified: false,
+            pending_approval: false
+          })
+
+        if (userError) throw userError
+        console.log('✅ ADD BORROWER - User record created')
+
+        // Step 3: Create user profile (optional fields)
+        console.log('📝 ADD BORROWER - Creating user profile...')
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .insert({
+            user_id: borrowerUserId,
+            address: formData.address || null,
+            kyc_status: 'pending'
+          })
+
+        if (profileError) {
+          console.warn('⚠️ ADD BORROWER - Profile creation failed:', profileError)
+          // Don't fail for profile errors
+        } else {
+          console.log('✅ ADD BORROWER - User profile created')
+        }
+      }
+      
+      // SCENARIO B: Existing user - add borrower relationship only
+      else if (emailValidation.status === 'existing_available') {
+        await handleExistingUserScenario(borrowerUserId!)
       }
 
-      // Step 4: Create borrower record
-      console.log('📝 ADD BORROWER - Creating borrower record...')
+      // COMMON: Create borrower relationship (both scenarios)
+      console.log('📝 COMMON - Creating borrower relationship')
       const { error: borrowerError } = await supabase
         .from('borrowers')
         .insert({
@@ -315,15 +439,15 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
         })
 
       if (borrowerError) throw borrowerError
-      console.log('✅ ADD BORROWER - Borrower record created')
+      console.log('✅ COMMON - Borrower relationship created')
 
-      // Step 5: Upload documents (optional)
-      console.log('📝 ADD BORROWER - Uploading documents...')
+      // COMMON: Upload documents (existing logic)
+      console.log('📝 COMMON - Uploading documents...')
       const uploadPromises = documents
         .filter(doc => doc.file)
         .map(async (doc) => {
           try {
-            const fileUrl = await uploadDocument(doc.file!, borrowerUserId, doc.type)
+            const fileUrl = await uploadDocument(doc.file!, borrowerUserId!, doc.type)
             
             return supabase
               .from('documents')
@@ -342,9 +466,13 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
       await Promise.all(uploadPromises)
       console.log('✅ ADD BORROWER - Documents processed')
 
-      // Success!
-      console.log('🎉 ADD BORROWER - Borrower created successfully!')
-      setSuccess('Borrower added successfully!')
+      // Success message based on scenario
+      const successMessage = emailValidation.status === 'new' 
+        ? 'New borrower created successfully!' 
+        : 'Existing user added as your borrower!'
+
+      console.log(`🎉 ${successMessage}`)
+      setSuccess(successMessage)
       
       // Reset form
       setFormData({
@@ -355,6 +483,12 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
         employment_type: 'salaried',
         monthly_income: '',
         credit_score: '650'
+      })
+      setEmailValidation({
+        checking: false,
+        status: 'new',
+        message: '',
+        can_proceed: true
       })
       setCurrentStep(1)
       setDocuments([
@@ -370,7 +504,7 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
       }
 
     } catch (error: unknown) {
-      console.error('💥 ADD BORROWER - Submission failed:', error)
+      console.error('💥 ENHANCED SUBMIT - Submission failed:', error)
       setError((error as Error).message || 'Failed to add borrower. Please try again.')
     } finally {
       setIsLoading(false)
@@ -511,7 +645,7 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
               </div>
             </div>
 
-            {/* Email with real-time validation */}
+            {/* 🆕 ENHANCED: Email with multi-tenant validation */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address <span className="text-red-500">*</span>
@@ -524,8 +658,10 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
                   value={formData.email}
                   onChange={handleInputChange}
                   className={`w-full pl-10 pr-10 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    emailValidation.exists ? 'border-red-300' : 
-                    formData.email && !emailValidation.checking && !emailValidation.exists ? 'border-green-300' : 
+                    emailValidation.status === 'error' ? 'border-red-300' : 
+                    emailValidation.status === 'existing_assigned' ? 'border-orange-300' :
+                    emailValidation.status === 'existing_available' ? 'border-blue-300' :
+                    emailValidation.can_proceed && formData.email ? 'border-green-300' : 
                     'border-gray-300'
                   }`}
                   placeholder="Enter email address"
@@ -536,19 +672,24 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent" />
                   )}
                   {!emailValidation.checking && formData.email && (
-                    emailValidation.exists ? (
+                    emailValidation.status === 'error' || emailValidation.status === 'existing_assigned' ? (
                       <AlertCircle className="h-4 w-4 text-red-500" />
-                    ) : (
+                    ) : emailValidation.can_proceed ? (
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                    )
+                    ) : null
                   )}
                 </div>
               </div>
-              {emailValidation.error && (
-                <p className="mt-1 text-sm text-red-600">{emailValidation.error}</p>
-              )}
-              {!emailValidation.checking && formData.email && !emailValidation.exists && !emailValidation.error && (
-                <p className="mt-1 text-sm text-green-600">Email is available</p>
+              {/* 🆕 ENHANCED: Multi-status email feedback */}
+              {emailValidation.message && (
+                <p className={`mt-1 text-sm ${
+                  emailValidation.status === 'error' ? 'text-red-600' :
+                  emailValidation.status === 'existing_assigned' ? 'text-orange-600' :
+                  emailValidation.status === 'existing_available' ? 'text-blue-600' :
+                  'text-green-600'
+                }`}>
+                  {emailValidation.message}
+                </p>
               )}
             </div>
 
@@ -696,7 +837,7 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
               <button
                 type="button"
                 onClick={handleNextStep}
-                disabled={isLoading || emailValidation.checking || emailValidation.exists}
+                disabled={isLoading || emailValidation.checking || !emailValidation.can_proceed}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 Next
@@ -704,7 +845,7 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
             ) : (
               <Button
                 onClick={handleSubmit}
-                disabled={isLoading || emailValidation.checking || emailValidation.exists}
+                disabled={isLoading || emailValidation.checking || !emailValidation.can_proceed}
                 loading={isLoading}
                 className="px-8 py-2 bg-green-600 hover:bg-green-700"
               >

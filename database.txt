@@ -1,28 +1,160 @@
-### 🔐 AUTHENTICATION FLOWS:
-```
-Super Admin: Login → Immediate access (no verification needed)
-Borrower: Register → Email verification → Login  
-Lender: Register → Email verification → Admin approval → Login
-```
+All schemas : 
 
----
+| table_name          |
+| ------------------- |
+| emis                |
+| loans               |
+| payments            |
+| loan_schedules      |
+| documents           |
+| email_verifications |
+| user_profiles       |
+| borrowers           |
+| loan_products       |
+| users               |
+| loan_applications   |
 
-## 🗄️ DATABASE ARCHITECTURE
 
-### Core Tables (PostgreSQL + Supabase):
-```sql
-users (id, email, role, phone, full_name, active, email_verified, pending_approval)
-user_profiles (user_id, avatar_url, address, kyc_status)
-borrowers (user_id, lender_id, credit_score, employment_type, monthly_income)
-loans (borrower_id, loan_number, principal_amount, interest_rate, tenure_months, status)
-emis (loan_id, emi_number, due_date, amount, status, paid_amount)
-payments (loan_id, amount, payment_date, payment_method, recorded_by)
-documents (borrower_id, document_type, file_url, verification_status)
-```
+All Tables and theier Columns : 
 
-### 🔥 CRITICAL DATABASE RULES:
-- **ID Matching**: `auth.users.id` MUST match `users.id` (foreign key dependencies)
-- **RLS Policies**: Use roles `anon`, `authenticated`, `service_role` (NOT `public`)
-- **No Recursive Queries**: RLS policies must NEVER query same table they're applied to
-- **Service Functions**: Use `SECURITY DEFINER` functions to bypass RLS when needed
-
+| table_name          | column_name             | data_type                   |
+| ------------------- | ----------------------- | --------------------------- |
+| borrowers           | id                      | uuid                        |
+| borrowers           | user_id                 | uuid                        |
+| borrowers           | credit_score            | integer                     |
+| borrowers           | employment_type         | character varying           |
+| borrowers           | monthly_income          | numeric                     |
+| borrowers           | lender_id               | uuid                        |
+| borrowers           | created_at              | timestamp with time zone    |
+| borrowers           | updated_at              | timestamp with time zone    |
+| borrowers           | deleted_at              | timestamp with time zone    |
+| documents           | id                      | uuid                        |
+| documents           | borrower_id             | uuid                        |
+| documents           | document_type           | USER-DEFINED                |
+| documents           | file_url                | text                        |
+| documents           | verification_status     | USER-DEFINED                |
+| documents           | verified_by             | uuid                        |
+| documents           | verified_at             | timestamp with time zone    |
+| documents           | created_at              | timestamp with time zone    |
+| documents           | updated_at              | timestamp with time zone    |
+| email_verifications | id                      | uuid                        |
+| email_verifications | user_id                 | uuid                        |
+| email_verifications | verification_token      | uuid                        |
+| email_verifications | email                   | character varying           |
+| email_verifications | verified_at             | timestamp with time zone    |
+| email_verifications | expires_at              | timestamp with time zone    |
+| email_verifications | attempts                | integer                     |
+| email_verifications | created_at              | timestamp with time zone    |
+| email_verifications | updated_at              | timestamp with time zone    |
+| emis                | id                      | uuid                        |
+| emis                | loan_id                 | uuid                        |
+| emis                | emi_number              | integer                     |
+| emis                | due_date                | date                        |
+| emis                | amount                  | numeric                     |
+| emis                | status                  | USER-DEFINED                |
+| emis                | paid_date               | date                        |
+| emis                | paid_amount             | numeric                     |
+| emis                | created_at              | timestamp with time zone    |
+| emis                | updated_at              | timestamp with time zone    |
+| emis                | principal_amount        | numeric                     |
+| emis                | interest_amount         | numeric                     |
+| emis                | late_fee                | numeric                     |
+| emis                | penalty_amount          | numeric                     |
+| emis                | outstanding_balance     | numeric                     |
+| emis                | payment_status          | character varying           |
+| emis                | days_overdue            | integer                     |
+| loan_applications   | id                      | uuid                        |
+| loan_applications   | borrower_id             | uuid                        |
+| loan_applications   | lender_id               | uuid                        |
+| loan_applications   | loan_product_id         | uuid                        |
+| loan_applications   | requested_amount        | numeric                     |
+| loan_applications   | requested_tenure_value  | integer                     |
+| loan_applications   | requested_tenure_unit   | character varying           |
+| loan_applications   | purpose                 | text                        |
+| loan_applications   | application_status      | character varying           |
+| loan_applications   | reviewed_by             | uuid                        |
+| loan_applications   | reviewed_at             | timestamp without time zone |
+| loan_applications   | review_notes            | text                        |
+| loan_applications   | loan_id                 | uuid                        |
+| loan_applications   | created_at              | timestamp without time zone |
+| loan_applications   | updated_at              | timestamp without time zone |
+| loan_products       | id                      | uuid                        |
+| loan_products       | name                    | character varying           |
+| loan_products       | min_amount              | numeric                     |
+| loan_products       | max_amount              | numeric                     |
+| loan_products       | min_tenure_days         | integer                     |
+| loan_products       | max_tenure_days         | integer                     |
+| loan_products       | interest_rate           | numeric                     |
+| loan_products       | late_fee_rate           | numeric                     |
+| loan_products       | processing_fee_rate     | numeric                     |
+| loan_products       | repayment_frequency     | character varying           |
+| loan_products       | loan_type               | character varying           |
+| loan_products       | active                  | boolean                     |
+| loan_products       | created_at              | timestamp without time zone |
+| loan_products       | updated_at              | timestamp without time zone |
+| loan_schedules      | id                      | uuid                        |
+| loan_schedules      | loan_id                 | uuid                        |
+| loan_schedules      | emi_number              | integer                     |
+| loan_schedules      | due_date                | date                        |
+| loan_schedules      | principal_amount        | numeric                     |
+| loan_schedules      | interest_amount         | numeric                     |
+| loan_schedules      | total_amount            | numeric                     |
+| loan_schedules      | outstanding_balance     | numeric                     |
+| loan_schedules      | created_at              | timestamp without time zone |
+| loans               | id                      | uuid                        |
+| loans               | loan_number             | character varying           |
+| loans               | borrower_id             | uuid                        |
+| loans               | principal_amount        | numeric                     |
+| loans               | interest_rate           | numeric                     |
+| loans               | tenure_value            | integer                     |
+| loans               | tenure_unit             | character varying           |
+| loans               | loan_type               | character varying           |
+| loans               | repayment_frequency     | character varying           |
+| loans               | total_amount            | numeric                     |
+| loans               | status                  | character varying           |
+| loans               | disbursement_date       | date                        |
+| loans               | maturity_date           | date                        |
+| loans               | created_by              | uuid                        |
+| loans               | approved_by             | uuid                        |
+| loans               | approved_at             | timestamp without time zone |
+| loans               | disbursed_at            | timestamp without time zone |
+| loans               | late_fee_rate           | numeric                     |
+| loans               | grace_period_days       | integer                     |
+| loans               | notes                   | text                        |
+| loans               | created_at              | timestamp without time zone |
+| loans               | updated_at              | timestamp without time zone |
+| payments            | id                      | uuid                        |
+| payments            | loan_id                 | uuid                        |
+| payments            | amount                  | numeric                     |
+| payments            | payment_date            | date                        |
+| payments            | payment_method          | USER-DEFINED                |
+| payments            | reference_number        | character varying           |
+| payments            | notes                   | text                        |
+| payments            | recorded_by             | uuid                        |
+| payments            | created_at              | timestamp with time zone    |
+| payments            | updated_at              | timestamp with time zone    |
+| payments            | emi_id                  | uuid                        |
+| payments            | payment_reference       | character varying           |
+| payments            | late_fee_paid           | numeric                     |
+| payments            | penalty_paid            | numeric                     |
+| payments            | payment_status          | character varying           |
+| user_profiles       | id                      | uuid                        |
+| user_profiles       | user_id                 | uuid                        |
+| user_profiles       | avatar_url              | text                        |
+| user_profiles       | address                 | text                        |
+| user_profiles       | kyc_status              | USER-DEFINED                |
+| user_profiles       | created_at              | timestamp with time zone    |
+| user_profiles       | updated_at              | timestamp with time zone    |
+| users               | id                      | uuid                        |
+| users               | email                   | character varying           |
+| users               | role                    | USER-DEFINED                |
+| users               | phone                   | character varying           |
+| users               | full_name               | character varying           |
+| users               | created_at              | timestamp with time zone    |
+| users               | updated_at              | timestamp with time zone    |
+| users               | deleted_at              | timestamp with time zone    |
+| users               | active                  | boolean                     |
+| users               | email_verified          | boolean                     |
+| users               | verification_token      | uuid                        |
+| users               | verification_expires_at | timestamp with time zone    |
+| users               | pending_approval        | boolean                     |
