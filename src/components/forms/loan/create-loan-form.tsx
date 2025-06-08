@@ -469,20 +469,26 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
       setError(validationError)
       return
     }
-
     if (!user || !emiCalculation) return
-
     setIsLoading(true)
     setError('')
-
+    
     try {
       console.log('🚀 LOAN - Creating loan...')
-
+      
+      // 🔧 NEW: Generate unique loan number
+      const timestamp = Date.now().toString().slice(-8)
+      const random = Math.floor(Math.random() * 99).toString().padStart(2, '0')
+      const loanNumber = `ML${timestamp}${random}`
+      console.log('🔢 LOAN - Generated loan number:', loanNumber)
+      
       // Calculate maturity date
       const maturityDate = emiCalculation.schedule[emiCalculation.schedule.length - 1]?.due_date
-
+      
       // Step 1: Create loan record
       const loanData = {
+        loan_number: loanNumber, // 🔧 FIXED: Add unique loan number
+        lender_id: user.id,      // 🔧 ENHANCED: Multi-tenant support
         borrower_id: formData.borrower_id,
         principal_amount: parseFloat(formData.principal_amount),
         interest_rate: parseFloat(formData.interest_rate),
@@ -491,7 +497,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         tenure_unit: formData.tenure_unit,
         loan_type: formData.loan_type,
         repayment_frequency: formData.repayment_frequency,
-        status: 'approved', // Auto-approve for now
+        status: 'approved',
         disbursement_date: formData.disbursement_date,
         maturity_date: maturityDate,
         created_by: user.id,
@@ -518,6 +524,45 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
       }
 
       console.log('✅ LOAN - Loan created:', loanResult.id)
+
+      // 🔧 ADD this after "Step 1: Create loan record" and before "Step 2: Create EMI schedule"
+
+// 🆕 NEW: Update borrower's roles to include 'borrower'
+console.log('📝 LOAN - Updating borrower roles...')
+try {
+  // Get current borrower user
+  const { data: borrowerUser, error: borrowerError } = await supabase
+    .from('users')
+    .select('id, role, roles')
+    .eq('id', formData.borrower_id)
+    .single()
+
+  if (borrowerError) {
+    console.warn('⚠️ LOAN - Could not fetch borrower user:', borrowerError)
+  } else if (borrowerUser) {
+    const currentRoles = borrowerUser.roles || [borrowerUser.role]
+    
+    // Add 'borrower' role if not present
+    if (!currentRoles.includes('borrower')) {
+      const newRoles = [...currentRoles, 'borrower']
+      
+      const { error: roleUpdateError } = await supabase
+        .from('users')
+        .update({ roles: newRoles })
+        .eq('id', formData.borrower_id)
+
+      if (roleUpdateError) {
+        console.warn('⚠️ LOAN - Role update failed:', roleUpdateError)
+      } else {
+        console.log('✅ LOAN - Borrower roles updated:', newRoles)
+      }
+    }
+  }
+} catch (error) {
+  console.warn('⚠️ LOAN - Role update error:', error)
+  // Don't fail loan creation for role update issues
+}
+
 
       // Step 2: Create EMI schedule
       const emiScheduleData = emiCalculation.schedule.map(emi => ({

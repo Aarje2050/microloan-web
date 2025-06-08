@@ -1,4 +1,4 @@
-// lib/auth.ts - COMPLETE ENTERPRISE SOLUTION (Replace entire file)
+// lib/auth.ts - COMPLETE ENTERPRISE ENHANCED VERSION
 import { create } from 'zustand'
 import { supabase } from './supabase'
 import { AuthUser, UserRole } from '@/types'
@@ -17,6 +17,7 @@ interface AuthActions {
   signOut: () => Promise<void>
   clearError: () => void
   setUser: (user: AuthUser | null) => void
+  upgradeToLender: () => Promise<{ success: boolean; error?: string }> // 🆕 NEW
 }
 
 type AuthStore = AuthState & AuthActions
@@ -82,6 +83,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         found: !!userData, 
         email: userData?.email,
         role: userData?.role,
+        roles: userData?.roles,
         active: userData?.active,
         error: userError?.message 
       })
@@ -109,13 +111,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         id: userData.id,
         email: userData.email,
         role: userData.role,
+        roles: userData.roles || [userData.role], // 🆕 ENHANCED: Ensure roles array exists
         full_name: userData.full_name,
         active: userData.active,
         email_verified: userData.email_verified,
         pending_approval: userData.pending_approval || false,
       }
 
-      console.log('✅ AUTH - Initialization successful:', authUser.email)
+      console.log('✅ AUTH - Initialization successful:', authUser.email, 'Roles:', authUser.roles)
       set({ 
         user: authUser, 
         loading: false, 
@@ -129,7 +132,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         user: null, 
         loading: false, 
         initialized: true, 
-        error: error.message || 'Initialization failed' 
+        error: (error as Error).message || 'Initialization failed' 
       })
     }
   },
@@ -190,13 +193,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         id: userData.id,
         email: userData.email,
         role: userData.role,
+        roles: userData.roles || [userData.role], // 🆕 ENHANCED: Ensure roles array
         full_name: userData.full_name,
         active: userData.active,
         email_verified: userData.email_verified,
         pending_approval: userData.pending_approval || false,
       }
 
-      console.log('✅ AUTH - Sign in successful:', authUser.email)
+      console.log('✅ AUTH - Sign in successful:', authUser.email, 'Roles:', authUser.roles)
       set({ 
         user: authUser, 
         loading: false, 
@@ -207,7 +211,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
     } catch (error: unknown) {
       console.error('💥 AUTH - Sign in exception:', error)
-      set({ loading: false, error: error.message })
+      set({ loading: false, error: (error as Error).message })
       return { error }
     }
   },
@@ -231,25 +235,102 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ user: null, loading: false, error: null })
     }
   },
+
+  // 🆕 NEW: Role upgrade function
+  upgradeToLender: async () => {
+    const state = get()
+    if (!state.user) {
+      console.error('❌ AUTH - No user logged in for role upgrade')
+      return { success: false, error: 'No user logged in' }
+    }
+
+    console.log('🔄 AUTH - Upgrading user to lender:', state.user.email)
+    
+    try {
+      // Check if user already has lender role
+      const currentRoles = state.user.roles || [state.user.role]
+      
+      if (currentRoles.includes('lender')) {
+        console.log('ℹ️ AUTH - User already has lender role')
+        return { success: true }
+      }
+
+      const newRoles = [...currentRoles, 'lender']
+      console.log('📝 AUTH - Updating roles from', currentRoles, 'to', newRoles)
+
+      // Update user roles in database
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          roles: newRoles
+        })
+        .eq('id', state.user.id)
+
+      if (error) {
+        console.error('❌ AUTH - Database update failed:', error)
+        throw error
+      }
+      
+
+      // Update local state  
+const updatedUser = {
+  ...state.user,
+  roles: newRoles.filter((role): role is UserRole => 
+    ['super_admin', 'lender', 'borrower'].includes(role)
+  )
+}
+
+      set({ user: updatedUser })
+      console.log('✅ AUTH - Role upgrade successful, new roles:', newRoles)
+      
+      return { success: true }
+    } catch (error: any) {
+      console.error('💥 AUTH - Role upgrade failed:', error)
+      return { success: false, error: error.message || 'Role upgrade failed' }
+    }
+  },
 }))
 
-// Simple hooks
+// 🆕 ENHANCED: Hook with multi-role support
 export const useAuth = () => {
   const store = useAuthStore()
+  
+  // Enhanced role calculations
+  const userRoles = store.user?.roles || (store.user?.role ? [store.user.role] : [])
+  const isLender = userRoles.includes('lender')
+  const isBorrower = userRoles.includes('borrower')
+  const isAdmin = store.user?.role === 'super_admin'
+  
+  console.log('🔍 AUTH HOOK - Role check:', {
+    user: store.user?.email,
+    userRoles,
+    isLender,
+    isBorrower,
+    isAdmin
+  })
+  
   return {
     user: store.user,
     loading: store.loading,
     initialized: store.initialized,
     error: store.error,
     isAuthenticated: !!store.user && store.user.active && store.user.email_verified,
-    isAdmin: store.user?.role === 'super_admin',
-    isLender: store.user?.role === 'lender',
-    isBorrower: store.user?.role === 'borrower',
+    isAdmin: isAdmin,
+    isLender: isLender,
+    isBorrower: isBorrower,
+    
+    // 🆕 NEW: Enhanced role checks
+    isBoth: isLender && isBorrower,
+    canBecomeLender: isBorrower && !isLender,
+    
     signIn: store.signIn,
     signOut: store.signOut,
     initialize: store.initialize,
     clearError: store.clearError,
     setUser: store.setUser,
+    
+    // 🆕 NEW: Role upgrade function
+    upgradeToLender: store.upgradeToLender,
   }
 }
 

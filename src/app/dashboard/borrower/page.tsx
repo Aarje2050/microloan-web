@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { 
   User, CreditCard, Calendar, DollarSign, Clock, 
   AlertTriangle, TrendingUp, LogOut, Home, Eye, Receipt,
-  CheckCircle, Bell, Phone, Mail
+  CheckCircle, Bell, Phone, Mail, Briefcase // 🆕 ADD Briefcase import
 } from 'lucide-react'
 
 interface BorrowerLoan {
@@ -59,10 +59,12 @@ type ViewMode = 'dashboard' | 'loan-details' | 'payment-history' | 'emi-schedule
 
 export default function BorrowerDashboard() {
   const router = useRouter()
-  const { user, signOut, isBorrower, initialized, isAuthenticated } = useAuth()
-  
+  const { user, signOut, isBorrower, initialized, isAuthenticated, 
+    canBecomeLender, isBoth, upgradeToLender } = useAuth()  
   // State management
   const [isSigningOut, setIsSigningOut] = React.useState(false)
+  const [isUpgrading, setIsUpgrading] = React.useState(false)
+
   const [redirectHandled, setRedirectHandled] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<ViewMode>('dashboard')
   const [selectedLoanId, setSelectedLoanId] = React.useState<string>('')
@@ -140,6 +142,47 @@ export default function BorrowerDashboard() {
       console.error('❌ BORROWER - Failed to load dashboard data:', error)
     }
   }
+
+  // 🆕 ADD this new function after your existing functions (around line 150)
+const handleBecomeLender = React.useCallback(async () => {
+  if (isUpgrading) return
+  
+  // Simple confirmation
+  const confirmed = window.confirm(
+    'Are you sure you want to become a lender?\n\n' +
+    'This will allow you to:\n' +
+    '• Add your own borrowers\n' +
+    '• Create and manage loans\n' +
+    '• Track payments and EMIs\n\n' +
+    'You can continue using borrower features as well.'
+  )
+  
+  if (!confirmed) return
+  
+  console.log('🔄 BORROWER - Starting role upgrade to lender')
+  setIsUpgrading(true)
+  
+  try {
+    const result = await upgradeToLender()
+    
+    if (result.success) {
+      console.log('✅ BORROWER - Role upgrade successful')
+      
+      // Show success message
+      alert('🎉 Congratulations! You are now a lender.\n\nYou can switch between borrower and lender views using the buttons in the header.')
+      
+      // Optional: Redirect to lender dashboard
+      // router.push('/dashboard/lender')
+    } else {
+      throw new Error(result.error || 'Role upgrade failed')
+    }
+  } catch (error: any) {
+    console.error('❌ BORROWER - Role upgrade failed:', error)
+    alert('❌ Failed to upgrade to lender. Please try again or contact support.')
+  } finally {
+    setIsUpgrading(false)
+  }
+}, [isUpgrading, upgradeToLender])
 
   // Load borrower's loans
   const loadBorrowerLoans = async () => {
@@ -515,38 +558,61 @@ export default function BorrowerDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <User className="h-8 w-8 text-blue-600 mr-3" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">My Loans</h1>
-                <p className="text-sm text-gray-600">Welcome, {user?.full_name || user?.email}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => router.push('/')}
-                className="inline-flex items-center text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md transition-colors"
-              >
-                <Home className="h-4 w-4 mr-2" />
-                Home
-              </button>
-              
-              <button
-                onClick={handleSignOut}
-                disabled={isSigningOut}
-                className="inline-flex items-center bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                {isSigningOut ? 'Signing Out...' : 'Sign Out'}
-              </button>
-            </div>
-          </div>
+     {/* Enhanced Header with Role Switch */}
+<div className="bg-white shadow">
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="flex justify-between items-center py-4">
+      <div className="flex items-center">
+        <User className="h-8 w-8 text-blue-600 mr-3" />
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">My Loans</h1>
+          <p className="text-sm text-gray-600">Welcome, {user?.full_name || user?.email}</p>
         </div>
       </div>
+      
+      <div className="flex items-center space-x-4">
+        {/* NEW: Role Switch Buttons */}
+        {canBecomeLender && (
+          <button
+            onClick={handleBecomeLender}
+            disabled={isUpgrading}
+            className="inline-flex items-center bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+          >
+            <Briefcase className="h-4 w-4 mr-2" />
+            {isUpgrading ? 'Upgrading...' : 'Become Lender'}
+          </button>
+        )}
+        
+        <button
+          onClick={() => router.push('/')}
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md transition-colors"
+        >
+          <Home className="h-4 w-4 mr-2" />
+          Home
+        </button>
+
+        {isBoth && (
+          <button
+            onClick={() => router.push('/dashboard/lender')}
+            className="inline-flex items-center bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
+          >
+            <Briefcase className="h-4 w-4 mr-2" />
+            Switch to Lender View
+          </button>
+        )}
+        
+        <button
+          onClick={handleSignOut}
+          disabled={isSigningOut}
+          className="inline-flex items-center bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          {isSigningOut ? 'Signing Out...' : 'Sign Out'}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -78,13 +78,14 @@ export interface DashboardStat {
 }
 
 export interface AuthUser {
-  id: string;
-  email: string;
-  role: UserRole;
-  full_name: string;
-  active: boolean;
-  email_verified: boolean;
-  pending_approval: boolean;
+  id: string
+  email: string
+  role: UserRole
+  roles?: UserRole[] // 🆕 NEW: Multi-role support
+  full_name: string
+  active: boolean
+  email_verified: boolean
+  pending_approval: boolean
 }
 
 export interface AuthState {
