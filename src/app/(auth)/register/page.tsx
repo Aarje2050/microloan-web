@@ -28,7 +28,7 @@ export default function RegisterPage() {
     }))
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     console.log('📝 REGISTER - Form submitted')
     setIsLoading(true)

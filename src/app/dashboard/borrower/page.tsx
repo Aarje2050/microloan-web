@@ -5,7 +5,7 @@ import React from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import { 
-  User, CreditCard, Calendar, Receipt, AlertCircle, 
+  User, CreditCard, Calendar, Receipt, 
   CheckCircle, Clock, DollarSign, LogOut, Home 
 } from 'lucide-react'
 
