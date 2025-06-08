@@ -232,7 +232,7 @@ export function isDesktop(): boolean {
 }
 
 // Local storage utilities with error handling
-export function setStorageItem(key: string, value: any): void {
+export function setStorageItem(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch (error) {

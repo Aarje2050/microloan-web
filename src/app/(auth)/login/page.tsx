@@ -51,9 +51,9 @@ export default function LoginPage() {
         console.log('🎉 LOGIN - Success! Getting user...')
         // Don't set loading to false yet, let the redirect handle it
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('💥 LOGIN - Exception:', err)
-      setError(err.message || 'An unexpected error occurred')
+      setError((err as Error).message || 'An unexpected error occurred')
       setIsLoading(false)
     }
   }

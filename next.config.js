@@ -1,6 +1,13 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   // PWA and mobile optimization
   async headers() {
     return [

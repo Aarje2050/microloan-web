@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { 
   CreditCard, Calculator, User, DollarSign, Calendar, 
-  FileText, AlertTriangle, CheckCircle, ArrowLeft, Clock
+   AlertTriangle, CheckCircle, ArrowLeft, Clock
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 

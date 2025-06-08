@@ -97,7 +97,7 @@ export const getCurrentUser = async () => {
     console.log('✅ SUPABASE - User data combined successfully:', user.email)
     return { user, error: null }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('💥 SUPABASE - getCurrentUser unexpected error:', error)
     return { user: null, error: { message: error.message || 'Unexpected error' } }
   }

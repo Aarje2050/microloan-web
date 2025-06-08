@@ -65,9 +65,9 @@ export default function RegisterPage() {
         phone: '',
         role: 'borrower'
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('💥 REGISTER - Exception:', err)
-      setError(err.message || 'Registration failed')
+      setError((err as Error).message || 'Registration failed')
     } finally {
       setIsLoading(false)
     }

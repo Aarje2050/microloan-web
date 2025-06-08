@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { 
   Briefcase, Users, CreditCard, DollarSign, Plus, 
-  Clock, AlertTriangle, TrendingUp, LogOut, Home, Eye, Receipt 
+  TrendingUp, LogOut, Home, Eye, Receipt 
 } from 'lucide-react'
 import AddBorrowerForm from '@/components/forms/add-borrower-form'
 import CreateLoanForm from '@/components/forms/loan/create-loan-form'
@@ -123,7 +123,7 @@ export default function LenderDashboard() {
         loadLoans()
       ])
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ LENDER - Failed to load dashboard data:', error)
     }
   }
@@ -162,7 +162,7 @@ export default function LenderDashboard() {
       if (usersError) throw usersError
 
       // Step 3: Get user profiles (optional)
-      let profilesData: any[] = []
+      let profilesData: Array<Record<string, any>> = []
       try {
         const { data: profiles } = await supabase
           .from('user_profiles')
@@ -194,7 +194,7 @@ export default function LenderDashboard() {
 
       setBorrowers(transformedBorrowers)
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ LENDER - Failed to load borrowers:', error)
       setBorrowers([])
     } finally {
@@ -332,7 +332,7 @@ const loadLoans = async () => {
       outstanding: totalOutstanding
     })
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ LENDER - Failed to load loans:', error)
     setLoans([])
     updateStats([], 0, 0, 0)

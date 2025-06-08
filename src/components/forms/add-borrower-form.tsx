@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { 
   User, Phone, Mail, MapPin, Briefcase, DollarSign, 
-  Upload, FileText, Camera, CreditCard, X, CheckCircle, AlertCircle 
+  Upload, CreditCard, X, CheckCircle, AlertCircle 
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -98,7 +98,7 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
         error: exists ? 'Email already exists' : '' 
       })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('💥 EMAIL CHECK - Exception:', error)
       setEmailValidation({ checking: false, exists: false, error: 'Unable to validate email' })
     }
@@ -175,10 +175,7 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
     return null
   }
 
-  const validateStep3 = () => {
-    // All documents optional now
-    return null
-  }
+  
 
   // Step navigation
   const handleNextStep = () => {
@@ -372,9 +369,9 @@ export default function AddBorrowerForm({ onSuccess, onCancel }: AddBorrowerForm
         setTimeout(() => onSuccess(), 2000)
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('💥 ADD BORROWER - Submission failed:', error)
-      setError(error.message || 'Failed to add borrower. Please try again.')
+      setError((error as Error).message || 'Failed to add borrower. Please try again.')
     } finally {
       setIsLoading(false)
     }

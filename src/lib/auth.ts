@@ -123,7 +123,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         error: null 
       })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('💥 AUTH - Initialization failed:', error)
       set({ 
         user: null, 
@@ -205,7 +205,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
       return { error: null }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('💥 AUTH - Sign in exception:', error)
       set({ loading: false, error: error.message })
       return { error }
@@ -226,7 +226,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
       
       set({ user: null, loading: false, error: null })
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('💥 AUTH - Sign out exception:', error)
       set({ user: null, loading: false, error: null })
     }

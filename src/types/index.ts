@@ -74,7 +74,7 @@ export interface DashboardStat {
   value: string | number;
   change?: string;
   changeType?: ChangeType;
-  icon: any;
+  icon: React.ComponentType<any> | string;
 }
 
 export interface AuthUser {
