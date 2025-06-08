@@ -1,0 +1,93 @@
+src
+├── app
+│   ├── (auth)
+│   │   ├── layout.tsx
+│   │   ├── login
+│   │   │   └── page.tsx
+│   │   └── register
+│   │       └── page.tsx
+│   ├── api
+│   │   ├── auth
+│   │   └── webhooks
+│   ├── auth
+│   │   ├── admin
+│   │   ├── borrower
+│   │   └── lender
+│   ├── dashboard
+│   │   ├── admin
+│   │   │   └── page.tsx
+│   │   ├── borrower
+│   │   │   └── page.tsx
+│   │   ├── lender
+│   │   │   └── page.tsx
+│   │   └── page.tsx
+│   ├── error.tsx
+│   ├── favicon.ico
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── loading.tsx
+│   ├── not-found.tsx
+│   ├── page.tsx
+│   └── providers.tsx
+├── assets
+│   ├── docs
+│   ├── fonts
+│   └── images
+│       ├── icons
+│       ├── illustrations
+│       └── logos
+├── components
+│   ├── common
+│   ├── features
+│   │   ├── analytics
+│   │   ├── auth
+│   │   ├── dashboard
+│   │   ├── index.ts
+│   │   ├── loans
+│   │   └── users
+│   ├── forms
+│   │   ├── add-borrower-form.tsx
+│   │   ├── auth
+│   │   ├── index.ts
+│   │   ├── loan
+│   │   └── user
+│   ├── layout
+│   │   ├── dashboard-layout.tsx
+│   │   ├── desktop-sidebar.tsx
+│   │   ├── index.ts
+│   │   └── mobile-navigation.tsx
+│   └── ui
+│       ├── badge.tsx
+│       ├── button.tsx
+│       ├── card.tsx
+│       ├── index.ts
+│       ├── input.tsx
+│       ├── loading.tsx
+│       ├── stats-card.tsx
+│       └── toast.tsx
+├── lib
+│   ├── api
+│   │   ├── analytics
+│   │   ├── loans
+│   │   └── users
+│   ├── auth
+│   ├── auth.ts
+│   ├── constants
+│   │   ├── app-config.ts
+│   │   ├── permissions.ts
+│   │   └── routes.ts
+│   ├── hooks
+│   │   └── index.ts
+│   ├── stores
+│   ├── supabase.ts
+│   ├── types
+│   │   └── index.ts
+│   ├── utils
+│   │   └── index.ts
+│   └── utils.ts
+├── middleware.ts
+├── styles
+│   └── themes
+└── types
+    ├── database.ts
+    └── index.ts

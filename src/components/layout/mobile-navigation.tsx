@@ -15,7 +15,7 @@ import {
   User
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/lib/stores/auth-store'
+import { useAuth } from '@/lib/auth'
 import { UserRole } from '@/types'
 
 // Navigation items for each role
