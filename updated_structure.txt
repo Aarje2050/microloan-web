@@ -42,7 +42,6 @@ src
 │   │   ├── analytics
 │   │   ├── auth
 │   │   ├── dashboard
-│   │   ├── index.ts
 │   │   ├── loans
 │   │   └── users
 │   ├── forms
@@ -50,11 +49,12 @@ src
 │   │   ├── auth
 │   │   ├── index.ts
 │   │   ├── loan
+│   │   │   ├── create-loan-form.tsx
+│   │   │   └── record-payment-form.tsx
 │   │   └── user
 │   ├── layout
 │   │   ├── dashboard-layout.tsx
 │   │   ├── desktop-sidebar.tsx
-│   │   ├── index.ts
 │   │   └── mobile-navigation.tsx
 │   └── ui
 │       ├── badge.tsx
@@ -74,14 +74,11 @@ src
 │   ├── auth.ts
 │   ├── constants
 │   │   ├── app-config.ts
-│   │   ├── permissions.ts
 │   │   └── routes.ts
 │   ├── hooks
-│   │   └── index.ts
 │   ├── stores
 │   ├── supabase.ts
 │   ├── types
-│   │   └── index.ts
 │   ├── utils
 │   │   └── index.ts
 │   └── utils.ts

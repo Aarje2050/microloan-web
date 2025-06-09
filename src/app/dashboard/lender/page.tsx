@@ -1,12 +1,11 @@
-// File: src/app/dashboard/lender/page.tsx
-// Updated lender dashboard with payment recording integration
-
+// app/dashboard/lender/page.tsx - MOBILE-FIRST LENDER DASHBOARD
 "use client";
 
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import DashboardLayout from "@/components/layout/dashboard-layout";
 import {
   Briefcase,
   Users,
@@ -15,11 +14,18 @@ import {
   DollarSign,
   Plus,
   TrendingUp,
-  LogOut,
-  Home,
   Eye,
   Receipt,
+  ArrowUp,
+  ArrowDown,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  IndianRupee
 } from "lucide-react";
+import { StatsCard } from "@/components/ui/stats-card";
+import { LoanCard, BorrowerCard, SectionContainer } from "@/components/ui/enterprise-cards";
 import AddBorrowerForm from "@/components/forms/add-borrower-form";
 import CreateLoanForm from "@/components/forms/loan/create-loan-form";
 import RecordPaymentForm from "@/components/forms/loan/record-payment-form";
@@ -57,21 +63,18 @@ type ViewMode = "dashboard" | "add-borrower" | "create-loan" | "record-payment";
 
 export default function LenderDashboard() {
   const router = useRouter();
-  const { user, signOut, isLender, initialized, isAuthenticated, isBoth } =
-    useAuth();
+  const { user, isLender, initialized, isAuthenticated } = useAuth();
 
   // ✅ ALL HOOKS AT TOP LEVEL
-  const [isSigningOut, setIsSigningOut] = React.useState(false);
   const [redirectHandled, setRedirectHandled] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<ViewMode>("dashboard");
-  const [selectedBorrowerForLoan, setSelectedBorrowerForLoan] =
-    React.useState<string>("");
-  const [selectedLoanForPayment, setSelectedLoanForPayment] =
-    React.useState<string>("");
+  const [selectedBorrowerForLoan, setSelectedBorrowerForLoan] = React.useState<string>("");
+  const [selectedLoanForPayment, setSelectedLoanForPayment] = React.useState<string>("");
   const [borrowers, setBorrowers] = React.useState<Borrower[]>([]);
   const [loans, setLoans] = React.useState<LoanSummary[]>([]);
   const [isLoadingBorrowers, setIsLoadingBorrowers] = React.useState(true);
   const [isLoadingLoans, setIsLoadingLoans] = React.useState(true);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const [stats, setStats] = React.useState({
     totalBorrowers: 0,
@@ -82,17 +85,15 @@ export default function LenderDashboard() {
     paymentsToday: 0,
   });
 
-  console.log("💼 LENDER DASHBOARD - State:", {
+  console.log("💼 MOBILE LENDER DASHBOARD - State:", {
     user: user?.email,
     isLender,
-    initialized,
-    isAuthenticated,
     viewMode,
     borrowersCount: borrowers.length,
     loansCount: loans.length,
   });
 
-  // ✅ SINGLE useEffect for auth handling
+  // ✅ AUTH HANDLING
   React.useEffect(() => {
     if (!initialized) return;
     if (redirectHandled) return;
@@ -117,7 +118,6 @@ export default function LenderDashboard() {
   // Load dashboard data
   React.useEffect(() => {
     if (!user || !isLender) return;
-
     loadDashboardData();
   }, [user, isLender]);
 
@@ -130,29 +130,34 @@ export default function LenderDashboard() {
       setIsLoadingBorrowers(true);
       setIsLoadingLoans(true);
 
-      // Load borrowers and loans in parallel
       await Promise.all([loadBorrowers(), loadLoans()]);
     } catch (error: unknown) {
       console.error("❌ LENDER - Failed to load dashboard data:", error);
     }
   };
 
+  // Pull to refresh functionality
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadDashboardData();
+      // Simulate haptic feedback
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(50);
+      }
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500); // Min 500ms for visual feedback
+    }
+  };
+
   // Load borrowers
   const loadBorrowers = async () => {
     try {
-      // Step 1: Get borrowers for this lender
       const { data: borrowersData, error: borrowersError } = await supabase
         .from("borrowers")
-        .select(
-          `
-          id,
-          user_id,
-          credit_score,
-          employment_type,
-          monthly_income,
-          created_at
-        `
-        )
+        .select(`
+          id, user_id, credit_score, employment_type, monthly_income, created_at
+        `)
         .eq("lender_id", user?.id)
         .order("created_at", { ascending: false });
 
@@ -163,7 +168,6 @@ export default function LenderDashboard() {
         return;
       }
 
-      // Step 2: Get user details separately
       const userIds = borrowersData.map((b) => b.user_id);
       const { data: usersData, error: usersError } = await supabase
         .from("users")
@@ -172,7 +176,6 @@ export default function LenderDashboard() {
 
       if (usersError) throw usersError;
 
-      // Step 3: Get user profiles (optional)
       let profilesData: Array<Record<string, any>> = [];
       try {
         const { data: profiles } = await supabase
@@ -181,18 +184,12 @@ export default function LenderDashboard() {
           .in("user_id", userIds);
         profilesData = profiles || [];
       } catch (profileError) {
-        console.log(
-          "⚠️ LENDER - Profiles table might not exist:",
-          profileError
-        );
+        console.log("⚠️ LENDER - Profiles table might not exist:", profileError);
       }
 
-      // Step 4: Combine data
       const transformedBorrowers: Borrower[] = borrowersData.map((borrower) => {
         const userInfo = usersData?.find((u) => u.id === borrower.user_id);
-        const profileInfo = profilesData.find(
-          (p) => p.user_id === borrower.user_id
-        );
+        const profileInfo = profilesData.find((p) => p.user_id === borrower.user_id);
 
         return {
           id: borrower.id,
@@ -218,31 +215,24 @@ export default function LenderDashboard() {
   };
 
   // Load loans with EMI information
-  // COMPLETE FIXED: Load loans with proper EMI calculation
   const loadLoans = async () => {
     try {
       console.log("📊 LENDER - Loading loans with EMI data...");
 
-      // Get loans directly from loans table
       const { data: loansData, error: loansError } = await supabase
         .from("loans")
         .select("*")
         .eq("created_by", user?.id)
-        // Remove status filter to see all loans
         .order("created_at", { ascending: false });
 
       if (loansError) throw loansError;
 
       if (!loansData || loansData.length === 0) {
-        console.log("No loans found");
         setLoans([]);
-        updateStats([], 0, 0, 0);
+        updateStats([], 0, 0, 0, borrowers.length);
         return;
       }
 
-      console.log("📋 LOANS RAW DATA:", loansData.length, "loans found");
-
-      // Get borrower names - FIXED variable declaration
       const borrowerIds = loansData.map((l) => l.borrower_id);
       const { data: borrowersData, error: borrowersError } = await supabase
         .from("users")
@@ -253,7 +243,6 @@ export default function LenderDashboard() {
         console.warn("⚠️ Borrowers query warning:", borrowersError);
       }
 
-      // Get EMI data for all loans
       const loanIds = loansData.map((l) => l.id);
       const { data: emisData, error: emisError } = await supabase
         .from("emis")
@@ -265,36 +254,29 @@ export default function LenderDashboard() {
         console.warn("⚠️ LENDER - EMIs query warning:", emisError);
       }
 
-      console.log("📋 EMI DATA:", (emisData || []).length, "EMIs found");
-
-      // Process loan summaries with real EMI data - COMPLETE FIX
       const transformedLoans: LoanSummary[] = loansData.map((loan) => {
         const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
         const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
 
-        // Calculate EMI statistics with proper status detection
         const totalEMIs = loanEMIs.length;
-
-        // CORRECTED: Check actual payment amounts vs EMI amounts
         const paidEMIs = loanEMIs.filter((e) => {
           const paidAmount = e.paid_amount || 0;
-          return paidAmount >= e.amount; // Fully paid
+          return paidAmount >= e.amount;
         }).length;
 
         const partialEMIs = loanEMIs.filter((e) => {
           const paidAmount = e.paid_amount || 0;
-          return paidAmount > 0 && paidAmount < e.amount; // Partially paid
+          return paidAmount > 0 && paidAmount < e.amount;
         });
 
         const pendingEMIs = loanEMIs.filter((e) => {
           const paidAmount = e.paid_amount || 0;
-          return paidAmount === 0; // Not paid at all
+          return paidAmount === 0;
         });
 
-        // Calculate outstanding balance - FIXED calculation
         const totalPaid = loanEMIs.reduce((sum, emi) => {
           const paidAmount = emi.paid_amount || 0;
-          return sum + Math.min(paidAmount, emi.amount); // Don't count overpayments in total
+          return sum + Math.min(paidAmount, emi.amount);
         }, 0);
 
         const outstandingBalance = Math.max(
@@ -302,14 +284,12 @@ export default function LenderDashboard() {
           (loan.total_amount || loan.principal_amount) - totalPaid
         );
 
-        // Find next due EMI (earliest unpaid/partial)
         const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
-          (a, b) =>
-            new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+          (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
         );
         const nextDueEMI = unpaidEMIs[0];
 
-        const result = {
+        return {
           id: loan.id,
           loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
           borrower_name: borrower?.full_name || "Unknown",
@@ -326,26 +306,10 @@ export default function LenderDashboard() {
             ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0)
             : 0,
         };
-
-        console.log("📋 PROCESSED LOAN:", {
-          loan_number: result.loan_number,
-          total_emis: result.total_emis,
-          paid_emis: result.paid_emis,
-          pending_emis: result.pending_emis,
-          outstanding: result.outstanding_balance,
-        });
-
-        return result;
       });
 
-      console.log(
-        "✅ LOANS TRANSFORMED:",
-        transformedLoans.length,
-        "loans processed"
-      );
       setLoans(transformedLoans);
 
-      // Calculate portfolio statistics
       const totalPortfolio = transformedLoans.reduce(
         (sum, loan) => sum + loan.total_amount,
         0
@@ -356,17 +320,12 @@ export default function LenderDashboard() {
       );
       const totalPaid = totalPortfolio - totalOutstanding;
 
-      updateStats(transformedLoans, totalPortfolio, totalPaid, 0);
+      updateStats(transformedLoans, totalPortfolio, totalPaid, 0, borrowers.length);
 
-      console.log("📊 FINAL STATS:", {
-        loans: transformedLoans.length,
-        portfolio: totalPortfolio,
-        outstanding: totalOutstanding,
-      });
     } catch (error: unknown) {
       console.error("❌ LENDER - Failed to load loans:", error);
       setLoans([]);
-      updateStats([], 0, 0, 0);
+      updateStats([], 0, 0, 0, borrowers.length);
     } finally {
       setIsLoadingLoans(false);
     }
@@ -377,56 +336,35 @@ export default function LenderDashboard() {
     loans: LoanSummary[],
     portfolioValue: number,
     totalPaid: number,
-    overdueAmount: number
+    overdueAmount: number,
+    borrowersCount: number  // ✅ Add this parameter
   ) => {
     const collectionRate =
       portfolioValue > 0 ? Math.round((totalPaid / portfolioValue) * 100) : 0;
 
     setStats({
-      totalBorrowers: borrowers.length,
+      totalBorrowers: borrowersCount,
       activeLoans: loans.length,
       portfolioValue: portfolioValue,
       collectionRate: Math.min(collectionRate, 100),
       overdueAmount: overdueAmount,
-      paymentsToday: 0, // TODO: Calculate today's payments
+      paymentsToday: 0,
     });
   };
 
-  // ✅ CLEAN SIGN OUT HANDLER
-  const handleSignOut = React.useCallback(async () => {
-    if (isSigningOut) return;
-
-    console.log("🚪 LENDER - Sign out clicked");
-    setIsSigningOut(true);
-
-    try {
-      await signOut();
-      console.log("✅ LENDER - Sign out completed");
-      setRedirectHandled(false);
-      router.replace("/login");
-    } catch (error) {
-      console.error("❌ LENDER - Sign out error:", error);
-      setRedirectHandled(false);
-      router.replace("/login");
-    }
-  }, [isSigningOut, signOut, router]);
-
   // Handle success callbacks
   const handleAddBorrowerSuccess = () => {
-    console.log("🎉 LENDER - Borrower added successfully");
     setViewMode("dashboard");
     loadDashboardData();
   };
 
   const handleCreateLoanSuccess = (loanId: string) => {
-    console.log("🎉 LENDER - Loan created successfully:", loanId);
     setViewMode("dashboard");
     setSelectedBorrowerForLoan("");
     loadDashboardData();
   };
 
   const handleRecordPaymentSuccess = (paymentId: string) => {
-    console.log("🎉 LENDER - Payment recorded successfully:", paymentId);
     setViewMode("dashboard");
     setSelectedLoanForPayment("");
     loadDashboardData();
@@ -434,13 +372,11 @@ export default function LenderDashboard() {
 
   // Handle actions
   const handleCreateLoanForBorrower = (borrowerId: string) => {
-    console.log("💰 LENDER - Creating loan for borrower:", borrowerId);
     setSelectedBorrowerForLoan(borrowerId);
     setViewMode("create-loan");
   };
 
   const handleRecordPaymentForLoan = (loanId: string) => {
-    console.log("💳 LENDER - Recording payment for loan:", loanId);
     setSelectedLoanForPayment(loanId);
     setViewMode("record-payment");
   };
@@ -465,86 +401,53 @@ export default function LenderDashboard() {
     });
   };
 
-  // Get loan status color
-  const getLoanStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800";
-      case "disbursed":
-        return "bg-blue-100 text-blue-800";
-      case "completed":
-        return "bg-gray-100 text-gray-800";
-      case "overdue":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-yellow-100 text-yellow-800";
-    }
-  };
-
   // ✅ LOADING STATE
   if (!initialized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-sm text-gray-600">
-            Loading lender dashboard...
-          </p>
+      <DashboardLayout>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-sm text-gray-600">Loading lender dashboard...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   // ✅ NOT AUTHENTICATED STATE
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !isLender) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Briefcase className="h-12 w-12 text-red-600 mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-gray-900">
-            Authentication Required
-          </h2>
-          <p className="text-sm text-gray-600">Redirecting to login...</p>
+      <DashboardLayout>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <Briefcase className="h-12 w-12 text-red-600 mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-gray-900">Access Required</h2>
+            <p className="text-sm text-gray-600">Redirecting...</p>
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  // ✅ NOT LENDER STATE
-  if (!isLender) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Briefcase className="h-12 w-12 text-red-600 mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-gray-900">
-            Lender Access Required
-          </h2>
-          <p className="text-sm text-gray-600">
-            Redirecting to your dashboard...
-          </p>
-        </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   // Show different views based on mode
   if (viewMode === "add-borrower") {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-4xl mx-auto px-4">
+      <DashboardLayout title="Add Borrower" showBackButton>
+        <div className="p-4">
           <AddBorrowerForm
             onSuccess={handleAddBorrowerSuccess}
             onCancel={() => setViewMode("dashboard")}
           />
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (viewMode === "create-loan") {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-4xl mx-auto px-4">
+      <DashboardLayout title="Create Loan" showBackButton>
+        <div className="p-4">
           <CreateLoanForm
             borrowerId={selectedBorrowerForLoan}
             onSuccess={handleCreateLoanSuccess}
@@ -554,14 +457,14 @@ export default function LenderDashboard() {
             }}
           />
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (viewMode === "record-payment") {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-4xl mx-auto px-4">
+      <DashboardLayout title="Record Payment" showBackButton>
+        <div className="p-4">
           <RecordPaymentForm
             loanId={selectedLoanForPayment}
             onSuccess={handleRecordPaymentSuccess}
@@ -571,464 +474,237 @@ export default function LenderDashboard() {
             }}
           />
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
-  // ✅ MAIN LENDER DASHBOARD CONTENT
+  // ✅ MAIN MOBILE-FIRST LENDER DASHBOARD
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Enhanced Header with Role Switch */}
-      <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <Briefcase className="h-8 w-8 text-blue-600 mr-3" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Lender Dashboard
-                </h1>
-                <p className="text-sm text-gray-600">
-                  Welcome, {user?.full_name || user?.email}
-                </p>
-              </div>
+    <DashboardLayout>
+      <div className="bg-gray-50 min-h-screen">
+        {/* Pull to Refresh Header */}
+        <div className="bg-white px-4 py-3 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Portfolio Overview</h2>
+              <p className="text-sm text-gray-600">
+                {loans.length} active loans • {borrowers.length} borrowers
+              </p>
             </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-5 w-5 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
 
-            <div className="flex items-center space-x-4">
-              
+        <div className="p-4 space-y-6">
+          {/* Professional Stats Grid - Minimal Design */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatsCard
+              title="Total Borrowers"
+              value={stats.totalBorrowers}
+              icon={Users}
+              loading={isLoadingBorrowers}
+              className="col-span-1"
+              subtitle="Active users"
+            />
+            <StatsCard
+              title="Active Loans"
+              value={stats.activeLoans}
+              icon={CreditCard}
+              loading={isLoadingLoans}
+              className="col-span-1"
+              subtitle="In progress"
+            />
+            <StatsCard
+              title="Portfolio Value"
+              value={formatCurrency(stats.portfolioValue)}
+              icon={IndianRupee}
+              loading={isLoadingLoans}
+              className="col-span-2 lg:col-span-1"
+              subtitle="Total disbursed"
+            />
+            <StatsCard
+              title="Collection Rate"
+              value={`${stats.collectionRate}%`}
+              change={stats.collectionRate >= 90 ? "Excellent" : stats.collectionRate >= 75 ? "Good" : "Needs attention"}
+              changeType={stats.collectionRate >= 90 ? "positive" : stats.collectionRate >= 75 ? "neutral" : "negative"}
+              icon={TrendingUp}
+              loading={isLoadingLoans}
+              className="col-span-2 lg:col-span-1"
+              subtitle="Performance"
+            />
+          </div>
 
+          {/* Mobile-Optimized Quick Actions */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
-                onClick={() => router.push("/")}
-                className="inline-flex items-center text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md transition-colors"
+                onClick={() => setViewMode("add-borrower")}
+                className="flex items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group"
               >
-                <Home className="h-4 w-4 mr-2" />
-                Home
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
+                    <Users className="h-6 w-6 text-white" />
+                  </div>
+                  <span className="text-sm font-medium text-blue-900">Add Borrower</span>
+                </div>
               </button>
 
-              {isBoth && (
-                <button
-                  onClick={() => router.push("/dashboard/borrower")}
-                  className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Check your loans{" "}
+              <button
+                onClick={() => setViewMode("create-loan")}
+                disabled={borrowers.length === 0}
+                className="flex items-center justify-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
+                    <CreditCard className="h-6 w-6 text-white" />
+                  </div>
+                  <span className="text-sm font-medium text-green-900">Create Loan</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setViewMode("record-payment")}
+                disabled={loans.length === 0}
+                className="flex items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
+                    <Receipt className="h-6 w-6 text-white" />
+                  </div>
+                  <span className="text-sm font-medium text-purple-900">Record Payment</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Enterprise-Grade Recent Loans */}
+          <SectionContainer
+            title="Recent Loans"
+            subtitle="Active loan portfolio"
+            count={loans.length}
+            action={
+              loans.length > 0 && (
+                <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  View All
                 </button>
-              )}
-
-              <button
-                onClick={handleSignOut}
-                disabled={isSigningOut}
-                className="inline-flex items-center bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                {isSigningOut ? "Signing Out..." : "Sign Out"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Portfolio Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <Users className="h-8 w-8 text-blue-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">
-                  My Borrowers
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {stats.totalBorrowers}
-                </p>
-                <p className="text-xs text-gray-500">Active borrowers</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <CreditCard className="h-8 w-8 text-green-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">
-                  Active Loans
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {stats.activeLoans}
-                </p>
-                <p className="text-xs text-gray-500">Loans disbursed</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <DollarSign className="h-8 w-8 text-purple-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">
-                  Portfolio Value
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {formatCurrency(stats.portfolioValue)}
-                </p>
-                <p className="text-xs text-gray-500">Total outstanding</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <TrendingUp className="h-8 w-8 text-orange-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">
-                  Collection Rate
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {stats.collectionRate}%
-                </p>
-                <p className="text-xs text-gray-500">Overall performance</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                Add New Borrower
-              </h3>
-              <Plus className="h-5 w-5 text-blue-600" />
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Register a new borrower with minimal required information
-            </p>
-            <button
-              onClick={() => setViewMode("add-borrower")}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Add Borrower
-            </button>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                Create New Loan
-              </h3>
-              <CreditCard className="h-5 w-5 text-green-600" />
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Issue a new loan to an existing borrower
-            </p>
-            <button
-              onClick={() => setViewMode("create-loan")}
-              disabled={borrowers.length === 0}
-              className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              Create Loan
-            </button>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                Record Payment
-              </h3>
-              <Receipt className="h-5 w-5 text-purple-600" />
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Record EMI payments and update loan status
-            </p>
-            <button
-              onClick={() => setViewMode("record-payment")}
-              disabled={loans.length === 0}
-              className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              Record Payment
-            </button>
-          </div>
-        </div>
-
-        {/* Active Loans Section */}
-        <div className="bg-white rounded-lg shadow mb-8">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">
-                Active Loans
-              </h3>
-              <span className="text-sm text-gray-500">
-                {loans.length} active
-              </span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
+              )
+            }
+          >
             {isLoadingLoans ? (
-              <div className="p-6 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-sm text-gray-600">Loading loans...</p>
               </div>
             ) : loans.length === 0 ? (
-              <div className="p-6 text-center">
-                <CreditCard className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <h4 className="text-lg font-medium text-gray-900 mb-2">
-                  No Active Loans
-                </h4>
-                <p className="text-gray-600 mb-4">
-                  Create loans for your borrowers to start managing payments.
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <CreditCard className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Loans Yet</h3>
+                <p className="text-gray-600 mb-6 text-sm max-w-sm mx-auto">
+                  Create your first loan to start tracking payments and managing your portfolio.
                 </p>
                 <button
                   onClick={() => setViewMode("create-loan")}
                   disabled={borrowers.length === 0}
-                  className="inline-flex items-center bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Create First Loan
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {loans.map((loan) => (
-                  <div
+              <div className="space-y-6">
+                {loans.slice(0, 3).map((loan) => (
+                  <LoanCard
                     key={loan.id}
-                    className="bg-white p-6 rounded-lg shadow border hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="font-semibold text-gray-900">
-                          {loan.loan_number}
-                        </h4>
-                        <p className="text-sm text-gray-600">
-                          {loan.borrower_name}
-                        </p>
-                      </div>
-                      <span
-                        className={`px-2 py-1 text-xs rounded-full ${getLoanStatusColor(
-                          loan.status
-                        )}`}
-                      >
-                        {loan.status.charAt(0).toUpperCase() +
-                          loan.status.slice(1)}
-                      </span>
-                    </div>
-
-                    <div className="space-y-3 text-gray-900">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">
-                          Outstanding:
-                        </span>
-                        <span className="font-bold text-red-600">
-                          {formatCurrency(loan.outstanding_balance)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">
-                          Total Amount:
-                        </span>
-                        <span className="font-medium text-gray-900">
-                          {formatCurrency(loan.total_amount)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">EMIs:</span>
-                        <span className="font-medium text-gray-900">
-                          {loan.paid_emis}/{loan.total_emis}
-                          <span className="text-xs text-gray-500 ml-1">
-                            ({loan.pending_emis} pending)
-                          </span>
-                        </span>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="w-full">
-                        <div className="flex justify-between text-xs text-gray-600 mb-1">
-                          <span>Progress</span>
-                          <span>
-                            {loan.total_emis > 0
-                              ? Math.round(
-                                  (loan.paid_emis / loan.total_emis) * 100
-                                )
-                              : 0}
-                            %
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                            style={{
-                              width: `${
-                                loan.total_emis > 0
-                                  ? (loan.paid_emis / loan.total_emis) * 100
-                                  : 0
-                              }%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {loan.next_due_date && (
-                        <>
-                          <div className="flex justify-between">
-                            <span className="text-sm text-gray-600">
-                              Next Due:
-                            </span>
-                            <span className="font-medium text-gray-900">
-                              {formatDate(loan.next_due_date)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm text-gray-600">
-                              Next Amount:
-                            </span>
-                            <span className="font-bold text-green-600">
-                              {formatCurrency(loan.next_due_amount)}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                      {loan.pending_emis === 0 && (
-                        <div className="bg-green-50 border border-green-200 p-2 rounded text-center">
-                          <span className="text-sm text-green-800 font-medium">
-                            ✅ Fully Paid
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-4 flex space-x-2">
-                      <button
-                        onClick={() => handleRecordPaymentForLoan(loan.id)}
-                        disabled={loan.pending_emis === 0}
-                        className="flex-1 bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {loan.pending_emis === 0 ? "Paid" : "Record Payment"}
-                      </button>
-                      <button className="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 transition-colors">
-                        <Eye className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
+                    loan={loan}
+                    onRecordPayment={handleRecordPaymentForLoan}
+                    onViewDetails={(loanId) => console.log('View loan details:', loanId)}
+                    formatCurrency={formatCurrency}
+                    formatDate={formatDate}
+                  />
                 ))}
+                
+                {loans.length > 3 && (
+                  <div className="text-center pt-4 border-t border-gray-200">
+                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                      View all {loans.length} loans →
+                    </button>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        </div>
+          </SectionContainer>
 
-        {/* Borrowers List */}
-        <div className="bg-white rounded-lg shadow mb-8">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">
-                My Borrowers
-              </h3>
-              <span className="text-sm text-gray-500">
-                {borrowers.length} total
-              </span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
+          {/* Enterprise-Grade Recent Borrowers */}
+          <SectionContainer
+            title="Recent Borrowers"
+            subtitle="Your customer base"
+            count={borrowers.length}
+            action={
+              borrowers.length > 0 && (
+                <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  View All
+                </button>
+              )
+            }
+          >
             {isLoadingBorrowers ? (
-              <div className="p-6 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-sm text-gray-600">Loading borrowers...</p>
               </div>
             ) : borrowers.length === 0 ? (
-              <div className="p-6 text-center">
-                <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <h4 className="text-lg font-medium text-gray-900 mb-2">
-                  No Borrowers Yet
-                </h4>
-                <p className="text-gray-600 mb-4">
-                  Start by adding your first borrower to begin managing loans.
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <Users className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Borrowers Yet</h3>
+                <p className="text-gray-600 mb-6 text-sm max-w-sm mx-auto">
+                  Add your first borrower to start building your lending portfolio.
                 </p>
                 <button
                   onClick={() => setViewMode("add-borrower")}
-                  className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add First Borrower
                 </button>
               </div>
             ) : (
-              <div className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {borrowers.slice(0, 6).map((borrower) => (
-                    <div
-                      key={borrower.id}
-                      className="p-4 border border-gray-200 rounded-lg hover:border-green-300 transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">
-                            {borrower.full_name}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            {borrower.email}
-                          </p>
-                          {borrower.monthly_income && (
-                            <p className="text-sm text-gray-500 mt-1">
-                              Income: {formatCurrency(borrower.monthly_income)}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() =>
-                              handleCreateLoanForBorrower(borrower.user_id)
-                            }
-                            className="text-green-600 hover:text-green-800"
-                            title="Create Loan"
-                          >
-                            <CreditCard className="h-4 w-4" />
-                          </button>
-                          <button
-                            className="text-blue-600 hover:text-blue-800"
-                            title="View Details"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {borrowers.length > 6 && (
-                  <div className="mt-4 text-center">
-                    <button className="text-blue-600 hover:text-blue-800 text-sm">
+              <div className="space-y-6">
+                {borrowers.slice(0, 3).map((borrower) => (
+                  <BorrowerCard
+                    key={borrower.id}
+                    borrower={borrower}
+                    onCreateLoan={handleCreateLoanForBorrower}
+                    onViewDetails={(borrowerId) => console.log('View borrower details:', borrowerId)}
+                    formatCurrency={formatCurrency}
+                  />
+                ))}
+                
+                {borrowers.length > 3 && (
+                  <div className="text-center pt-4 border-t border-gray-200">
+                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
                       View all {borrowers.length} borrowers →
                     </button>
                   </div>
                 )}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Status Info */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-          <h4 className="text-green-800 font-medium mb-4">✅ System Status:</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-green-700">✅ Add Borrower - WORKING!</p>
-              <p className="text-green-700">✅ Create Loan - WORKING!</p>
-              <p className="text-green-700">✅ Record Payment - NEW FEATURE!</p>
-              <p className="text-green-700">
-                ✅ Payment Flexibility - ENTERPRISE GRADE!
-              </p>
-            </div>
-            <div>
-              <p className="text-green-700">🔄 Next: Admin dashboard</p>
-              <p className="text-green-700">🔄 Then: Mobile optimization</p>
-              <p className="text-green-700">🔄 Then: Advanced analytics</p>
-              <p className="text-green-700">🔄 Then: Automated notifications</p>
-            </div>
-          </div>
+          </SectionContainer>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
