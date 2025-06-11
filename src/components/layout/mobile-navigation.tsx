@@ -12,7 +12,11 @@ import {
   User,
   PlusCircle,
   Settings,
-  TrendingUp
+  TrendingUp,
+  BarChart3,
+  Building,
+  Receipt,
+  Phone
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -40,9 +44,10 @@ export default function MobileNavigation({
 
   // Determine user type from auth if not provided
   const currentUserType = userType || 
-    (pathname.includes('/lender') ? 'lender' : 
+    (pathname.includes('/admin') ? 'admin' : 
+     pathname.includes('/lender') ? 'lender' : 
      pathname.includes('/borrower') ? 'borrower' :
-     pathname.includes('/admin') ? 'admin' :
+     isAdmin ? 'admin' :
      isLender ? 'lender' : 
      isBorrower ? 'borrower' : 'lender')
 
@@ -88,7 +93,7 @@ export default function MobileNavigation({
   const borrowerNavItems: NavItem[] = [
     {
       icon: Home,
-      label: 'Home',
+      label: 'Dashboard',
       href: '/dashboard/borrower',
       color: 'blue'
     },
@@ -96,20 +101,19 @@ export default function MobileNavigation({
       icon: CreditCard,
       label: 'My Loans',
       href: '/dashboard/borrower/loans',
-      badge: 0, // TODO: Get from actual data
       color: 'green'
     },
     {
-      icon: TrendingUp,
+      icon: Receipt,
       label: 'Payments',
       href: '/dashboard/borrower/payments',
       color: 'purple'
     },
     {
-      icon: Users,
-      label: 'Lenders',
-      href: '/dashboard/borrower/lenders',
-      color: 'indigo'
+      icon: Phone,
+      label: 'Support',
+      href: '/dashboard/borrower/support',
+      color: 'orange'
     },
     {
       icon: User,
@@ -122,34 +126,35 @@ export default function MobileNavigation({
   // Admin navigation items
   const adminNavItems: NavItem[] = [
     {
-      icon: Home,
+      icon: BarChart3,
       label: 'Dashboard',
       href: '/dashboard/admin',
-      color: 'blue'
+      color: 'purple'
     },
     {
       icon: Users,
       label: 'Users',
       href: '/dashboard/admin/users',
-      color: 'purple'
+      badge: 0, // TODO: Get from actual data
+      color: 'blue'
+    },
+    {
+      icon: Building,
+      label: 'Lenders',
+      href: '/dashboard/admin/lenders',
+      color: 'green'
     },
     {
       icon: CreditCard,
       label: 'Loans',
       href: '/dashboard/admin/loans',
-      color: 'green'
+      color: 'indigo'
     },
     {
       icon: TrendingUp,
       label: 'Analytics',
       href: '/dashboard/admin/analytics',
       color: 'orange'
-    },
-    {
-      icon: Settings,
-      label: 'Settings',
-      href: '/dashboard/admin/settings',
-      color: 'gray'
     }
   ]
 

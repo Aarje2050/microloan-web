@@ -14,6 +14,7 @@ interface StatsCardProps {
   className?: string
   loading?: boolean
   subtitle?: string
+  color?: string
 }
 
 export function StatsCard({

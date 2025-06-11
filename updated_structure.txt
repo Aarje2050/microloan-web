@@ -19,7 +19,15 @@ src
 │   │   ├── borrower
 │   │   │   └── page.tsx
 │   │   ├── lender
-│   │   │   └── page.tsx
+│   │   │   ├── actions
+│   │   │   │   └── page.tsx
+│   │   │   ├── borrowers
+│   │   │   │   └── page.tsx
+│   │   │   ├── loans
+│   │   │   │   └── page.tsx
+│   │   │   ├── page.tsx
+│   │   │   └── profile
+│   │   │       └── page.tsx
 │   │   └── page.tsx
 │   ├── error.tsx
 │   ├── favicon.ico
@@ -60,6 +68,8 @@ src
 │       ├── badge.tsx
 │       ├── button.tsx
 │       ├── card.tsx
+│       ├── enterprise-cards.tsx
+│       ├── filter-bar.tsx
 │       ├── index.ts
 │       ├── input.tsx
 │       ├── loading.tsx

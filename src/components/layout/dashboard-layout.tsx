@@ -14,7 +14,7 @@ import {
   LogOut,
   ArrowLeft,
   Menu,
-  X
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -43,7 +43,7 @@ export default function DashboardLayout({
 }: DashboardLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, signOut, isLender, isBorrower, isBoth, isAuthenticated } = useAuth()
+  const { user, signOut, isLender, isBorrower, isBoth, isAuthenticated, isAdmin } = useAuth()
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
   const [isSigningOut, setIsSigningOut] = React.useState(false)
@@ -112,6 +112,34 @@ export default function DashboardLayout({
     }
   ]
 
+
+  // Borrower navigation items
+  const adminNavItems: NavItem[] = [
+    {
+      icon: Home,
+      label: 'Dashboard',
+      href: '/dashboard/admin',
+      isActive: pathname === '/dashboard/borrower'
+    },
+    {
+      icon: CreditCard,
+      label: 'My Loans',
+      href: '/dashboard/admin/loans',
+      isActive: pathname.startsWith('/dashboard/borrower/loans')
+    },
+    {
+      icon: Users,
+      label: 'Lenders',
+      href: '/dashboard/admin/lenders',
+      isActive: pathname.startsWith('/dashboard/borrower/lenders')
+    },
+    {
+      icon: User,
+      label: 'Profile',
+      href: '/dashboard/admin/profile',
+      isActive: pathname.startsWith('/dashboard/borrower/profile')
+    }
+  ]
   // Get current navigation items based on user role and current path
   const getCurrentNavItems = (): NavItem[] => {
     // More specific path matching to avoid confusion
@@ -122,10 +150,11 @@ export default function DashboardLayout({
       return lenderNavItems
     }
     if (pathname.startsWith('/dashboard/admin')) {
-      return [] // Admin nav items (when implemented)
+      return adminNavItems
     }
     
     // Default based on user role
+    if (isAdmin) return adminNavItems
     if (isLender) return lenderNavItems
     if (isBorrower) return borrowerNavItems
     return lenderNavItems
