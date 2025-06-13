@@ -1,4 +1,4 @@
-// File: src/components/forms/loan/create-loan-form.tsx - COMPLETE ENHANCED VERSION
+// File: src/components/forms/loan/create-loan-form.tsx - COMPLETE ENHANCED VERSION WITH INTEREST-ONLY SUPPORT
 'use client'
 
 import React from 'react'
@@ -43,7 +43,7 @@ interface EMICalculation {
   emi_amount: number
   total_amount: number
   total_interest: number
-  effective_interest_rate: number // 🆕 NEW: For custom EMI calculations
+  effective_interest_rate: number
   schedule: Array<{
     emi_number: number
     due_date: string | undefined
@@ -62,9 +62,10 @@ interface FormData {
   tenure_unit: string
   interest_rate: string
   interest_rate_unit: string
-  interest_calculation_method: 'flat' | 'reducing' // 🆕 NEW
+  interest_calculation_method: 'flat' | 'reducing'
   repayment_frequency: string
   loan_type: string
+  is_interest_only: boolean // 🆕 NEW: Interest-only loan flag
   purpose: string
   disbursement_date: string
   notes: string
@@ -87,7 +88,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
   const [isCalculating, setIsCalculating] = React.useState(false)
   const [isLoadingBorrowers, setIsLoadingBorrowers] = React.useState(true)
   
-  // 🆕 NEW: Manual EMI adjustment states
+  // Manual EMI adjustment states
   const [isEmiEditable, setIsEmiEditable] = React.useState(false)
   const [customEmiAmount, setCustomEmiAmount] = React.useState('')
   const [isRecalculating, setIsRecalculating] = React.useState(false)
@@ -101,11 +102,12 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     tenure_unit: 'days',
     interest_rate: '',
     interest_rate_unit: 'annual',
-    interest_calculation_method: 'flat', // 🆕 NEW: Default to flat
+    interest_calculation_method: 'flat',
     repayment_frequency: 'daily',
     loan_type: 'daily',
+    is_interest_only: false, // 🆕 NEW: Default to regular loan
     purpose: '',
-    disbursement_date: new Date().toISOString().split('T')[0]|| '',
+    disbursement_date: new Date().toISOString().split('T')[0] || '',
     notes: ''
   })
 
@@ -136,7 +138,6 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
       console.log('📊 LOAN - Loading borrowers for lender:', user?.id)
       setIsLoadingBorrowers(true)
       
-      // Get borrowers for this lender
       const { data: borrowersData, error: borrowersError } = await supabase
         .from('borrowers')
         .select('id, user_id, monthly_income, credit_score')
@@ -150,7 +151,6 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         return
       }
 
-      // Get user details separately
       const userIds = borrowersData.map(b => b.user_id)
       const { data: usersData, error: usersError } = await supabase
         .from('users')
@@ -159,7 +159,6 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
 
       if (usersError) throw usersError
 
-      // Combine the data
       const transformedBorrowers: Borrower[] = borrowersData.map(borrower => {
         const userInfo = usersData?.find(u => u.id === borrower.user_id)
 
@@ -215,7 +214,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     setError('')
     
     // Reset custom EMI when key fields change
-    if (['principal_amount', 'tenure_value', 'interest_rate', 'interest_rate_unit', 'interest_calculation_method', 'repayment_frequency'].includes(name)) {
+    if (['principal_amount', 'tenure_value', 'interest_rate', 'interest_rate_unit', 'interest_calculation_method', 'repayment_frequency', 'is_interest_only'].includes(name)) {
       setIsEmiEditable(false)
       setCustomEmiAmount('')
       calculateEMI({
@@ -223,6 +222,28 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         [name]: value
       })
     }
+  }
+
+  // 🆕 NEW: Handle loan structure change (regular vs interest-only)
+  const handleLoanStructureChange = (isInterestOnly: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      is_interest_only: isInterestOnly,
+      // Reset some fields when switching loan structure
+      loan_product_id: '', // Clear product selection as it might not be compatible
+      repayment_frequency: isInterestOnly ? 'monthly' : 'daily' // Default to monthly for interest-only
+    }))
+    
+    setIsEmiEditable(false)
+    setCustomEmiAmount('')
+    setError('')
+    
+    // Recalculate with new structure
+    calculateEMI({
+      ...formData,
+      is_interest_only: isInterestOnly,
+      repayment_frequency: isInterestOnly ? 'monthly' : 'daily'
+    })
   }
 
   // Handle borrower selection
@@ -258,7 +279,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     }
   }
 
-  // 🆕 ENHANCED: EMI Calculation with Flat vs Reducing methods
+  // 🆕 ENHANCED: EMI Calculation with Interest-Only Support
   const calculateEMI = async (data: typeof formData) => {
     const { 
       principal_amount, 
@@ -266,7 +287,8 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
       interest_rate, 
       interest_rate_unit, 
       repayment_frequency,
-      interest_calculation_method
+      interest_calculation_method,
+      is_interest_only
     } = data
     
     if (!principal_amount || !tenure_value || !interest_rate) {
@@ -315,8 +337,17 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
       let totalAmount: number
       let totalInterest: number
 
-      // 🆕 NEW: Calculate based on method
-      if (interest_calculation_method === 'flat') {
+      // 🆕 NEW: Interest-Only Calculation
+      if (is_interest_only) {
+        console.log('💰 LOAN - Using INTEREST-ONLY calculation')
+        
+        // Interest-only: Only interest payment each period, principal remains
+        const interestPerPeriod = principal * (periodRate / 100)
+        totalInterest = interestPerPeriod * totalPeriods
+        totalAmount = principal + totalInterest
+        emiAmount = interestPerPeriod
+        
+      } else if (interest_calculation_method === 'flat') {
         // FLAT INTEREST METHOD
         console.log('💰 LOAN - Using FLAT interest calculation')
         
@@ -356,18 +387,20 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         }
       }
 
-      // Generate EMI schedule
-      const schedule = generateEMISchedule(data, emiAmount, totalPeriods, principal, totalInterest, interest_calculation_method, periodRate)
+      // Generate schedule based on loan type
+      const schedule = is_interest_only 
+        ? generateInterestOnlySchedule(data, emiAmount, totalPeriods, principal)
+        : generateEMISchedule(data, emiAmount, totalPeriods, principal, totalInterest, interest_calculation_method, periodRate)
 
       const calculation: EMICalculation = {
         emi_amount: Math.round(emiAmount * 100) / 100,
         total_amount: Math.round(totalAmount * 100) / 100,
         total_interest: Math.round(totalInterest * 100) / 100,
-        effective_interest_rate: parseFloat(interest_rate), // Original rate
+        effective_interest_rate: parseFloat(interest_rate),
         schedule
       }
 
-      console.log(`💰 LOAN - ${interest_calculation_method.toUpperCase()} calculation completed:`, calculation)
+      console.log(`💰 LOAN - ${is_interest_only ? 'INTEREST-ONLY' : interest_calculation_method.toUpperCase()} calculation completed:`, calculation)
       setEmiCalculation(calculation)
       
     } catch (error) {
@@ -378,7 +411,46 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     }
   }
 
-  // 🆕 NEW: Reverse calculation - Calculate interest rate from custom EMI
+  // 🆕 NEW: Generate Interest-Only Schedule
+  const generateInterestOnlySchedule = (
+    data: typeof formData,
+    interestAmount: number,
+    totalPeriods: number,
+    principal: number
+  ) => {
+    const schedule = []
+    const startDate = new Date(data.disbursement_date || new Date())
+
+    for (let i = 1; i <= totalPeriods; i++) {
+      // Interest-only: No principal payment in regular schedule
+      const interestForPeriod = interestAmount
+      const principalForPeriod = 0 // Principal remains unchanged
+      const balance = principal // Principal balance stays same
+
+      // Calculate due date
+      const dueDate = new Date(startDate)
+      if (data.repayment_frequency === 'daily') {
+        dueDate.setDate(startDate.getDate() + i)
+      } else if (data.repayment_frequency === 'weekly') {
+        dueDate.setDate(startDate.getDate() + (i * 7))
+      } else if (data.repayment_frequency === 'monthly') {
+        dueDate.setMonth(startDate.getMonth() + i)
+      }
+
+      schedule.push({
+        emi_number: i,
+        due_date: dueDate.toISOString().split('T')[0],
+        principal: principalForPeriod,
+        interest: Math.round(interestForPeriod * 100) / 100,
+        emi_amount: Math.round(interestForPeriod * 100) / 100,
+        balance: Math.round(balance * 100) / 100
+      })
+    }
+
+    return schedule
+  }
+
+  // Reverse calculation - Calculate interest rate from custom EMI
   const calculateFromCustomEMI = async (customEmi: number) => {
     if (!emiCalculation || customEmi <= 0) return
 
@@ -387,20 +459,18 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     try {
       const principal = parseFloat(formData.principal_amount)
       const tenure = parseInt(formData.tenure_value)
-      const { interest_calculation_method } = formData
+      const { interest_calculation_method, is_interest_only } = formData
 
       let effectiveRate: number
 
-      if (interest_calculation_method === 'flat') {
-        // FLAT: Total = EMI × Tenure, Interest = Total - Principal
+      if (is_interest_only) {
+        // Interest-only: Rate = (EMI / Principal) * 100
+        effectiveRate = (customEmi / principal) * 100
+      } else if (interest_calculation_method === 'flat') {
         const totalAmount = customEmi * tenure
         const totalInterest = totalAmount - principal
-        
-        // Rate per period = Total Interest / (Principal × Tenure)
         effectiveRate = (totalInterest / (principal * tenure)) * 100
-
       } else {
-        // REDUCING BALANCE: Use iterative method to find rate
         effectiveRate = findInterestRateForEMI(principal, customEmi, tenure)
       }
 
@@ -428,20 +498,20 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         }
       }
 
-      // Recalculate with the new rate
       const totalAmount = customEmi * tenure
       const totalInterest = totalAmount - principal
 
-      // Generate new schedule
-      const schedule = generateEMISchedule(
-        formData, 
-        customEmi, 
-        tenure, 
-        principal, 
-        totalInterest, 
-        formData.interest_calculation_method, 
-        effectiveRate
-      )
+      const schedule = formData.is_interest_only
+        ? generateInterestOnlySchedule(formData, customEmi, tenure, principal)
+        : generateEMISchedule(
+            formData, 
+            customEmi, 
+            tenure, 
+            principal, 
+            totalInterest, 
+            formData.interest_calculation_method, 
+            effectiveRate
+          )
 
       const updatedCalculation: EMICalculation = {
         emi_amount: customEmi,
@@ -453,7 +523,6 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
 
       setEmiCalculation(updatedCalculation)
       
-      // Update the interest rate in form (for display)
       setFormData(prev => ({
         ...prev,
         interest_rate: (Math.round(displayRate * 100) / 100).toString()
@@ -475,7 +544,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
 
   // Helper: Find interest rate for given EMI (reducing balance)
   const findInterestRateForEMI = (principal: number, targetEmi: number, tenure: number): number => {
-    let rate = 0.1 // Start with 0.1%
+    let rate = 0.1
     let iteration = 0
     const maxIterations = 1000
     const tolerance = 0.01
@@ -507,7 +576,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     return rate
   }
 
-  // Helper: Generate EMI schedule
+  // Helper: Generate EMI schedule (existing function - unchanged)
   const generateEMISchedule = (
     data: typeof formData,
     emiAmount: number,
@@ -527,13 +596,11 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
       let emiForPeriod = emiAmount
 
       if (method === 'flat') {
-        // FLAT: Same interest and principal each period
         interestForPeriod = totalInterest / totalPeriods
         principalForPeriod = principal / totalPeriods
         balance -= principalForPeriod
         
       } else if (data.repayment_frequency === 'bullet') {
-        // Bullet payment
         if (i < totalPeriods) {
           interestForPeriod = totalInterest / (totalPeriods - 1)
           principalForPeriod = 0
@@ -544,13 +611,11 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
           emiForPeriod = interestForPeriod + principalForPeriod
         }
       } else {
-        // REDUCING: Interest on outstanding balance
         interestForPeriod = balance * (periodRate / 100)
         principalForPeriod = emiAmount - interestForPeriod
         balance -= principalForPeriod
       }
 
-      // Calculate due date
       const dueDate = new Date(startDate)
       if (data.repayment_frequency === 'daily') {
         dueDate.setDate(startDate.getDate() + i)
@@ -573,7 +638,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     return schedule
   }
 
-  // 🆕 NEW: Handle custom EMI input
+  // Handle custom EMI input
   const handleCustomEmiChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setCustomEmiAmount(value)
@@ -583,13 +648,12 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     }
   }
 
-  // 🆕 NEW: Toggle EMI editing
+  // Toggle EMI editing
   const toggleEmiEditing = () => {
     if (!isEmiEditable) {
       setCustomEmiAmount(emiCalculation?.emi_amount.toString() || '')
     } else {
       setCustomEmiAmount('')
-      // Recalculate with original rate
       calculateEMI(formData)
     }
     setIsEmiEditable(!isEmiEditable)
@@ -668,21 +732,19 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
     try {
       console.log('🚀 LOAN - Creating loan...')
       
-      // Generate unique loan number
       const timestamp = Date.now().toString().slice(-8)
       const random = Math.floor(Math.random() * 99).toString().padStart(2, '0')
       const loanNumber = `ML${timestamp}${random}`
       
-      // Calculate maturity date
       const maturityDate = emiCalculation.schedule[emiCalculation.schedule.length - 1]?.due_date
       
-      // Create loan record
+      // 🆕 ENHANCED: Create loan record with interest-only support
       const loanData = {
         loan_number: loanNumber,
         lender_id: user.id,
         borrower_id: formData.borrower_id,
         principal_amount: parseFloat(formData.principal_amount),
-        interest_rate: emiCalculation.effective_interest_rate, // Use effective rate if EMI was adjusted
+        interest_rate: emiCalculation.effective_interest_rate,
         total_amount: emiCalculation.total_amount,
         tenure_value: parseInt(formData.tenure_value),
         tenure_unit: formData.tenure_unit,
@@ -694,7 +756,12 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         created_by: user.id,
         approved_by: user.id,
         approved_at: new Date().toISOString(),
-        notes: formData.notes
+        notes: formData.notes,
+        // 🆕 NEW: Interest-only specific fields
+        is_interest_only: formData.is_interest_only,
+        current_principal_balance: formData.is_interest_only 
+          ? parseFloat(formData.principal_amount) 
+          : null
       }
 
       const { data: loanResult, error: loanError } = await supabase
@@ -750,8 +817,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
 
       if (emiError) throw emiError
 
-      // Success!
-      setSuccess(`Loan ${loanResult.loan_number} created successfully!`)
+      setSuccess(`${formData.is_interest_only ? 'Interest-only loan' : 'Loan'} ${loanResult.loan_number} created successfully!`)
       
       // Reset form
       setFormData({
@@ -765,6 +831,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         interest_calculation_method: 'flat',
         repayment_frequency: 'daily',
         loan_type: 'daily',
+        is_interest_only: false,
         purpose: '',
         disbursement_date: new Date().toISOString().split('T')[0] || '',
         notes: ''
@@ -838,7 +905,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         
         <div className="mt-2 text-sm opacity-90">
           {currentStep === 1 && 'Select Borrower'}
-          {currentStep === 2 && 'Loan Details & Calculation Method'}
+          {currentStep === 2 && 'Loan Details & Structure'}
           {currentStep === 3 && 'EMI Calculation & Adjustment'}
           {currentStep === 4 && 'Review & Submit'}
         </div>
@@ -937,7 +1004,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         {/* Step 2: Loan Details */}
         {currentStep === 2 && (
           <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900">Loan Details & Calculation Method</h3>
+            <h3 className="text-lg font-medium text-gray-900">Loan Details & Structure</h3>
             
             {/* Selected Borrower Info */}
             {selectedBorrower && (
@@ -947,69 +1014,150 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
               </div>
             )}
 
-            {/* 🆕 NEW: Interest Calculation Method */}
+            {/* 🆕 NEW: Loan Structure Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                Interest Calculation Method <span className="text-red-500">*</span>
+                Loan Structure <span className="text-red-500">*</span>
               </label>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Flat Interest Option */}
+                {/* Regular EMI Loan */}
                 <div
-                  onClick={() => setFormData(prev => ({ ...prev, interest_calculation_method: 'flat' }))}
+                  onClick={() => handleLoanStructureChange(false)}
                   className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    formData.interest_calculation_method === 'flat'
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-gray-200 hover:border-green-300 hover:bg-green-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-gray-900">Flat Interest</h4>
-                    <div className={`w-4 h-4 rounded-full border-2 ${
-                      formData.interest_calculation_method === 'flat'
-                        ? 'border-green-500 bg-green-500'
-                        : 'border-gray-300'
-                    }`}>
-                      {formData.interest_calculation_method === 'flat' && (
-                        <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  
-                </div>
-
-                {/* Reducing Balance Option */}
-                <div
-                  onClick={() => setFormData(prev => ({ ...prev, interest_calculation_method: 'reducing' }))}
-                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    formData.interest_calculation_method === 'reducing'
+                    !formData.is_interest_only
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-gray-900">Reducing Balance</h4>
+                    <h4 className="font-medium text-gray-900">Regular EMI Loan</h4>
                     <div className={`w-4 h-4 rounded-full border-2 ${
-                      formData.interest_calculation_method === 'reducing'
+                      !formData.is_interest_only
                         ? 'border-blue-500 bg-blue-500'
                         : 'border-gray-300'
                     }`}>
-                      {formData.interest_calculation_method === 'reducing' && (
+                      {!formData.is_interest_only && (
                         <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
                       )}
                     </div>
                   </div>
-                  
-                  
+                  <p className="text-sm text-gray-600">
+                    Fixed EMI with principal + interest. Standard loan structure.
+                  </p>
+                </div>
+
+                {/* Interest-Only Loan */}
+                <div
+                  onClick={() => handleLoanStructureChange(true)}
+                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                    formData.is_interest_only
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-200 hover:border-green-300 hover:bg-green-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-gray-900">Interest-Only Loan</h4>
+                    <div className={`w-4 h-4 rounded-full border-2 ${
+                      formData.is_interest_only
+                        ? 'border-green-500 bg-green-500'
+                        : 'border-gray-300'
+                    }`}>
+                      {formData.is_interest_only && (
+                        <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    Pay only interest regularly. Principal payable anytime.
+                  </p>
                 </div>
               </div>
 
-             
+              {/* Interest-Only Info */}
+              {formData.is_interest_only && (
+                <div className="mt-3 bg-green-50 border border-green-200 p-3 rounded-lg">
+                  <div className="flex items-start">
+                    <AlertTriangle className="h-4 w-4 text-green-600 mt-0.5 mr-2" />
+                    <div className="text-sm text-green-800">
+                      <strong>Interest-Only Loan Features:</strong>
+                      <ul className="mt-1 list-disc list-inside space-y-1">
+                        <li>Borrower pays only interest on schedule</li>
+                        <li>Principal can be paid anytime (partial or full)</li>
+                        <li>Interest automatically recalculates on reduced principal</li>
+                        <li>No sequential payment restrictions for principal</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
+            {/* Interest Calculation Method (only for regular loans) */}
+            {!formData.is_interest_only && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Interest Calculation Method <span className="text-red-500">*</span>
+                </label>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Flat Interest Option */}
+                  <div
+                    onClick={() => setFormData(prev => ({ ...prev, interest_calculation_method: 'flat' }))}
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      formData.interest_calculation_method === 'flat'
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-gray-200 hover:border-green-300 hover:bg-green-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-gray-900">Flat Interest</h4>
+                      <div className={`w-4 h-4 rounded-full border-2 ${
+                        formData.interest_calculation_method === 'flat'
+                          ? 'border-green-500 bg-green-500'
+                          : 'border-gray-300'
+                      }`}>
+                        {formData.interest_calculation_method === 'flat' && (
+                          <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Simple interest calculation. Easy to understand.
+                    </p>
+                  </div>
+
+                  {/* Reducing Balance Option */}
+                  <div
+                    onClick={() => setFormData(prev => ({ ...prev, interest_calculation_method: 'reducing' }))}
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      formData.interest_calculation_method === 'reducing'
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-gray-900">Reducing Balance</h4>
+                      <div className={`w-4 h-4 rounded-full border-2 ${
+                        formData.interest_calculation_method === 'reducing'
+                          ? 'border-blue-500 bg-blue-500'
+                          : 'border-gray-300'
+                      }`}>
+                        {formData.interest_calculation_method === 'reducing' && (
+                          <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Interest on outstanding balance. Banking standard.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Loan Product Selection */}
-            {loanProducts.length > 0 && (
+            {loanProducts.length > 0 && !formData.is_interest_only && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Loan Product <span className="text-gray-400">(Optional)</span>
@@ -1080,11 +1228,6 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                     <option value="annual">% per annum</option>
                   </select>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {formData.interest_rate_unit === 'daily' && 'Daily interest rate (e.g., 0.1% per day)'}
-                  {formData.interest_rate_unit === 'monthly' && 'Monthly interest rate (e.g., 2% per month)'}
-                  {formData.interest_rate_unit === 'annual' && 'Annual interest rate (e.g., 24% per year)'}
-                </p>
               </div>
 
               {/* Tenure */}
@@ -1130,7 +1273,9 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
-                  <option value="bullet">Bullet Payment (Interest only + Principal at end)</option>
+                  {!formData.is_interest_only && (
+                    <option value="bullet">Bullet Payment (Interest only + Principal at end)</option>
+                  )}
                 </select>
               </div>
             </div>
@@ -1172,47 +1317,57 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         {/* Step 3: EMI Calculation */}
         {currentStep === 3 && (
           <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900">EMI Calculation & Manual Adjustment</h3>
+            <h3 className="text-lg font-medium text-gray-900">
+              {formData.is_interest_only ? 'Interest Calculation & Manual Adjustment' : 'EMI Calculation & Manual Adjustment'}
+            </h3>
             
             {isCalculating ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Calculating EMI schedule...</p>
+                <p className="text-gray-600">
+                  {formData.is_interest_only ? 'Calculating interest schedule...' : 'Calculating EMI schedule...'}
+                </p>
               </div>
             ) : emiCalculation ? (
               <div className="space-y-6">
-                {/* 🆕 ENHANCED Summary Cards with Method Info */}
+                {/* Summary Cards with Loan Type Info */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {/* Method Indicator */}
+                  {/* Loan Type Indicator */}
                   <div className={`p-4 rounded-lg ${
-                    formData.interest_calculation_method === 'flat' 
+                    formData.is_interest_only 
                       ? 'bg-green-50 border border-green-200' 
-                      : 'bg-blue-50 border border-blue-200'
+                      : formData.interest_calculation_method === 'flat' 
+                        ? 'bg-green-50 border border-green-200' 
+                        : 'bg-blue-50 border border-blue-200'
                   }`}>
                     <h4 className={`font-medium ${
+                      formData.is_interest_only ? 'text-green-900' :
                       formData.interest_calculation_method === 'flat' ? 'text-green-900' : 'text-blue-900'
                     }`}>
-                      Method
+                      Loan Type
                     </h4>
                     <p className={`text-lg font-bold ${
+                      formData.is_interest_only ? 'text-green-900' :
                       formData.interest_calculation_method === 'flat' ? 'text-green-900' : 'text-blue-900'
                     }`}>
-                      {formData.interest_calculation_method === 'flat' ? 'Flat' : 'Reducing'}
+                      {formData.is_interest_only ? 'Interest-Only' : 
+                       formData.interest_calculation_method === 'flat' ? 'Flat' : 'Reducing'}
                     </p>
                     <p className={`text-sm ${
+                      formData.is_interest_only ? 'text-green-700' :
                       formData.interest_calculation_method === 'flat' ? 'text-green-700' : 'text-blue-700'
                     }`}>
-                      {formData.interest_calculation_method === 'flat' 
-                        ? 'Traditional' 
-                        : 'Banking standard'}
+                      {formData.is_interest_only ? 'Interest only' :
+                       formData.interest_calculation_method === 'flat' ? 'Traditional' : 'Banking standard'}
                     </p>
                   </div>
 
-                  {/* 🆕 NEW: Editable EMI Amount */}
+                  {/* Editable EMI/Interest Amount */}
                   <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-medium text-purple-900">
-                        {formData.repayment_frequency === 'bullet' ? 'Interest Payment' : 'EMI Amount'}
+                        {formData.is_interest_only ? 'Interest Amount' : 
+                         formData.repayment_frequency === 'bullet' ? 'Interest Payment' : 'EMI Amount'}
                       </h4>
                       <button
                         onClick={toggleEmiEditing}
@@ -1220,7 +1375,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                         className={`p-1 rounded transition-colors ${
                           isEmiEditable ? 'bg-purple-200 text-purple-800' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
                         }`}
-                        title={isEmiEditable ? 'Cancel editing' : 'Edit EMI amount'}
+                        title={isEmiEditable ? 'Cancel editing' : 'Edit amount'}
                       >
                         {isRecalculating ? (
                           <RefreshCw className="h-3 w-3 animate-spin" />
@@ -1237,7 +1392,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                           value={customEmiAmount}
                           onChange={handleCustomEmiChange}
                           className="w-full text-lg font-bold bg-white border border-purple-300 rounded px-2 py-1 text-purple-900"
-                          placeholder="Enter custom EMI"
+                          placeholder={`Enter custom ${formData.is_interest_only ? 'interest' : 'EMI'}`}
                           min="1"
                           step="1"
                         />
@@ -1270,7 +1425,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                   </div>
                 </div>
 
-                {/* 🆕 NEW: Interest Rate Adjustment Info */}
+                {/* Interest Rate Adjustment Info */}
                 {isEmiEditable && emiCalculation.effective_interest_rate !== parseFloat(formData.interest_rate) && (
                   <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
                     <h4 className="font-medium text-yellow-900 mb-2">📊 Interest Rate Adjustment</h4>
@@ -1285,36 +1440,59 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                       </div>
                     </div>
                     <p className="text-xs text-yellow-700 mt-2">
-                      Interest rate automatically adjusted to match your custom EMI amount of {formatCurrency(emiCalculation.emi_amount)}
+                      Interest rate automatically adjusted to match your custom amount of {formatCurrency(emiCalculation.emi_amount)}
                     </p>
                   </div>
                 )}
 
-               
+                {/* Interest-Only Special Info */}
+                {formData.is_interest_only && (
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                    <h4 className="font-medium text-green-900 mb-2">💡 Interest-Only Loan Features</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-green-700">Principal Balance: </span>
+                        <span className="font-medium">{formatCurrency(parseFloat(formData.principal_amount))}</span>
+                        <p className="text-xs text-green-600 mt-1">Remains unchanged until manual payment</p>
+                      </div>
+                      <div>
+                        <span className="text-green-700">Interest per {formData.repayment_frequency.slice(0, -2)}: </span>
+                        <span className="font-medium">{formatCurrency(emiCalculation.emi_amount)}</span>
+                        <p className="text-xs text-green-600 mt-1">Recalculates when principal is paid</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                {/* EMI Schedule Table */}
+                {/* Schedule Table */}
                 <div className="bg-gray-50 rounded-lg overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-200">
-                    <h4 className="font-medium text-gray-900">Repayment Schedule</h4>
+                    <h4 className="font-medium text-gray-900">
+                      {formData.is_interest_only ? 'Interest Payment Schedule' : 'Repayment Schedule'}
+                    </h4>
                   </div>
                   
                   <div className="max-h-64 overflow-y-auto">
                     <table className="w-full text-sm text-gray-900">
                       <thead className="bg-gray-100 sticky top-0">
                         <tr>
-                          <th className="px-4 py-2 text-left">EMI</th>
+                          <th className="px-4 py-2 text-left">#</th>
                           <th className="px-4 py-2 text-left">Due Date</th>
                           <th className="px-4 py-2 text-right">Principal</th>
                           <th className="px-4 py-2 text-right">Interest</th>
-                          <th className="px-4 py-2 text-right">EMI Amount</th>
-                          <th className="px-4 py-2 text-right">Balance</th>
+                          <th className="px-4 py-2 text-right">
+                            {formData.is_interest_only ? 'Payment' : 'EMI Amount'}
+                          </th>
+                          <th className="px-4 py-2 text-right">
+                            {formData.is_interest_only ? 'Principal Balance' : 'Balance'}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {emiCalculation.schedule.map((emi) => (
                           <tr key={emi.emi_number} className="border-b border-gray-200">
                             <td className="px-4 py-2">{emi.emi_number}</td>
-                            <td className="px-4 py-2">{new Date(emi.due_date|| new Date()).toLocaleDateString('en-IN')}</td>
+                            <td className="px-4 py-2">{new Date(emi.due_date || new Date()).toLocaleDateString('en-IN')}</td>
                             <td className="px-4 py-2 text-right">{formatCurrency(emi.principal)}</td>
                             <td className="px-4 py-2 text-right">{formatCurrency(emi.interest)}</td>
                             <td className="px-4 py-2 text-right font-medium">{formatCurrency(emi.emi_amount)}</td>
@@ -1329,7 +1507,7 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
             ) : (
               <div className="text-center py-8">
                 <Calculator className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p className="text-gray-600">Complete loan details to calculate EMI</p>
+                <p className="text-gray-600">Complete loan details to calculate payments</p>
               </div>
             )}
           </div>
@@ -1351,8 +1529,11 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                   <p className="font-medium">{formatCurrency(parseFloat(formData.principal_amount || '0'))}</p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-600">Calculation Method</label>
-                  <p className="font-medium">{formData.interest_calculation_method === 'flat' ? 'Flat Interest' : 'Reducing Balance'}</p>
+                  <label className="text-sm text-gray-600">Loan Structure</label>
+                  <p className="font-medium">
+                    {formData.is_interest_only ? 'Interest-Only Loan' : 
+                     `Regular EMI (${formData.interest_calculation_method === 'flat' ? 'Flat Interest' : 'Reducing Balance'})`}
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm text-gray-600">Interest Rate</label>
@@ -1381,7 +1562,9 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                 <div className="border-t pt-4 mt-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="text-sm text-gray-600">EMI Amount</label>
+                      <label className="text-sm text-gray-600">
+                        {formData.is_interest_only ? 'Interest Amount' : 'EMI Amount'}
+                      </label>
                       <p className="font-bold text-lg">{formatCurrency(emiCalculation.emi_amount)}</p>
                       {isEmiEditable && (
                         <span className="text-xs text-blue-600">Custom amount</span>
@@ -1396,6 +1579,15 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
                       <p className="font-bold text-lg">{formatCurrency(emiCalculation.total_interest)}</p>
                     </div>
                   </div>
+                  
+                  {formData.is_interest_only && (
+                    <div className="mt-4 p-3 bg-green-100 rounded-lg">
+                      <p className="text-sm text-green-800">
+                        <strong>Interest-Only Loan:</strong> Principal balance of {formatCurrency(parseFloat(formData.principal_amount))} 
+                        can be paid anytime. Interest will automatically recalculate on reduced principal.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

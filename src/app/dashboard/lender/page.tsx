@@ -1094,7 +1094,7 @@ export default function LenderDashboard() {
   if (viewMode === "create-loan") {
     return (
       <DashboardLayout>
-        <div className="max-w-2xl mx-auto p-6">
+        <div className="max-w-4xl mx-auto p-6">
           <div className="mb-6">
             <Button
               variant="outline"
@@ -1120,7 +1120,7 @@ export default function LenderDashboard() {
   if (viewMode === "record-payment") {
     return (
       <DashboardLayout>
-        <div className="max-w-2xl mx-auto p-6">
+        <div className="max-w-3xl mx-auto p-6">
           <div className="mb-6">
             <Button
               variant="outline"
