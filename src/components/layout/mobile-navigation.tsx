@@ -59,33 +59,33 @@ export default function MobileNavigation({
       icon: Home,
       label: 'Home',
       href: '/dashboard/lender',
-      color: 'blue'
+      color: 'primary'
     },
     {
       icon: CreditCard,
       label: 'Loans',
       href: '/dashboard/lender/loans',
       badge: 0, // TODO: Get from actual data
-      color: 'green'
+      color: 'success'
     },
     {
       icon: Users,
       label: 'Borrowers',
       href: '/dashboard/lender/borrowers',
-      color: 'purple'
+      color: 'primary'
     },
     {
       icon: Zap,
       label: 'Quick',
       href: '/dashboard/lender/actions',
       isAction: true,
-      color: 'orange'
+      color: 'warning'
     },
     {
       icon: User,
       label: 'Profile',
       href: '/dashboard/lender/profile',
-      color: 'gray'
+      color: 'muted'
     }
   ]
 
@@ -95,31 +95,31 @@ export default function MobileNavigation({
       icon: Home,
       label: 'Dashboard',
       href: '/dashboard/borrower',
-      color: 'blue'
+      color: 'primary'
     },
     {
       icon: CreditCard,
       label: 'My Loans',
       href: '/dashboard/borrower/loans',
-      color: 'green'
+      color: 'success'
     },
     {
       icon: Receipt,
       label: 'Payments',
       href: '/dashboard/borrower/payments',
-      color: 'purple'
+      color: 'primary'
     },
     {
       icon: Phone,
       label: 'Support',
       href: '/dashboard/borrower/support',
-      color: 'orange'
+      color: 'warning'
     },
     {
       icon: User,
       label: 'Profile',
       href: '/dashboard/borrower/profile',
-      color: 'gray'
+      color: 'muted'
     }
   ]
 
@@ -129,35 +129,35 @@ export default function MobileNavigation({
       icon: BarChart3,
       label: 'Dashboard',
       href: '/dashboard/admin',
-      color: 'purple'
+      color: 'primary'
     },
     {
       icon: Users,
       label: 'Users',
       href: '/dashboard/admin/users',
       badge: 0, // TODO: Get from actual data
-      color: 'blue'
-    },
-    {
-      icon: Building,
-      label: 'Lenders',
-      href: '/dashboard/admin/lenders',
-      color: 'green'
+      color: 'primary'
     },
     {
       icon: CreditCard,
       label: 'Loans',
       href: '/dashboard/admin/loans',
-      color: 'indigo'
+      color: 'success'
     },
     {
-      icon: TrendingUp,
-      label: 'Analytics',
-      href: '/dashboard/admin/analytics',
-      color: 'orange'
+      icon: Receipt,
+      label: 'EMIs',
+      href: '/dashboard/admin/emis',
+      color: 'warning'
+    },
+    {
+      icon: Settings,
+      label: 'Settings',
+      href: '/dashboard/admin/settings',
+      color: 'muted'
     }
   ]
-
+  
   // Get navigation items based on user type
   const getNavItems = (): NavItem[] => {
     switch (currentUserType) {
@@ -192,17 +192,19 @@ export default function MobileNavigation({
     router.push(href)
   }
 
-  // Get color classes for nav items
+  // Get color classes for nav items using our enterprise design system
   const getColorClasses = (color: string, isActive: boolean) => {
-    const colors = {
-      blue: isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-500',
-      green: isActive ? 'text-green-600 bg-green-50' : 'text-gray-500',
-      purple: isActive ? 'text-purple-600 bg-purple-50' : 'text-gray-500',
-      orange: isActive ? 'text-orange-600 bg-orange-50' : 'text-gray-500',
-      indigo: isActive ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500',
-      gray: isActive ? 'text-gray-700 bg-gray-100' : 'text-gray-500'
+    if (isActive) {
+      return 'text-primary bg-primary/5'
     }
-    return colors[color as keyof typeof colors] || colors.gray
+    
+    const colors = {
+      primary: 'text-muted-foreground hover:text-primary',
+      success: 'text-muted-foreground hover:text-success',
+      warning: 'text-muted-foreground hover:text-warning',
+      muted: 'text-muted-foreground hover:text-foreground'
+    }
+    return colors[color as keyof typeof colors] || colors.muted
   }
 
   // Don't render if not on a dashboard page
@@ -212,8 +214,8 @@ export default function MobileNavigation({
 
   return (
     <nav className={cn(
-      "fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 lg:hidden",
-      "safe-area-pb", // For iOS safe area
+      "fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 lg:hidden",
+      "safe-area-pb shadow-lg", // Enhanced shadow for depth
       className
     )}>
       {/* Navigation Items */}
@@ -221,14 +223,14 @@ export default function MobileNavigation({
         {navItems.map((item) => {
           const Icon = item.icon
           const active = isActive(item.href)
-          const colorClasses = getColorClasses(item.color || 'gray', active)
+          const colorClasses = getColorClasses(item.color || 'muted', active)
           
           return (
             <button
               key={item.href}
               onClick={() => handleNavigation(item.href, item.isAction)}
               className={cn(
-                "flex flex-col items-center justify-center relative transition-all duration-200 hover:scale-105",
+                "flex flex-col items-center justify-center relative transition-all duration-200 hover-lift interactive-scale",
                 colorClasses,
                 active && "transform scale-105"
               )}
@@ -236,7 +238,7 @@ export default function MobileNavigation({
             >
               {/* Active indicator */}
               {active && (
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-6 h-1 bg-current rounded-full opacity-80" />
+                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-6 h-1 bg-primary rounded-full opacity-80" />
               )}
               
               {/* Icon with special styling for action button */}
@@ -245,14 +247,14 @@ export default function MobileNavigation({
                 item.isAction && !active && "animate-pulse"
               )}>
                 <Icon className={cn(
-                  "h-5 w-5 transition-all duration-200",
-                  active ? "h-6 w-6" : "h-5 w-5",
+                  "transition-all duration-200",
+                  active ? "h-6 w-6 text-primary" : "h-5 w-5",
                   item.isAction && "drop-shadow-sm"
                 )} />
                 
                 {/* Badge */}
                 {item.badge !== undefined && item.badge > 0 && (
-                  <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 font-medium shadow-sm">
+                  <div className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 font-medium shadow-sm">
                     {item.badge > 99 ? '99+' : item.badge}
                   </div>
                 )}
@@ -261,7 +263,7 @@ export default function MobileNavigation({
               {/* Label */}
               <span className={cn(
                 "text-xs font-medium mt-1 transition-all duration-200 leading-tight",
-                active ? "text-current opacity-100" : "opacity-75"
+                active ? "text-primary opacity-100" : "opacity-75"
               )}>
                 {item.label}
               </span>
@@ -269,7 +271,7 @@ export default function MobileNavigation({
               {/* Ripple effect on tap */}
               <div className="absolute inset-0 rounded-lg overflow-hidden">
                 <div className={cn(
-                  "absolute inset-0 transform scale-0 bg-current opacity-10 rounded-lg transition-transform duration-300",
+                  "absolute inset-0 transform scale-0 bg-current opacity-5 rounded-lg transition-transform duration-300",
                   "hover:scale-100 active:scale-100"
                 )} />
               </div>
@@ -279,7 +281,7 @@ export default function MobileNavigation({
       </div>
       
       {/* Safe area spacing for iOS */}
-      <div className="h-safe-area-inset-bottom bg-white" />
+      <div className="h-safe-area-inset-bottom bg-card" />
     </nav>
   )
 }

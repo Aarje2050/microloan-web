@@ -15,9 +15,18 @@ src
 │   │   └── lender
 │   ├── dashboard
 │   │   ├── admin
-│   │   │   └── page.tsx
+│   │   │   ├── page.tsx
+│   │   │   └── users
+│   │   │       └── page.tsx
 │   │   ├── borrower
-│   │   │   └── page.tsx
+│   │   │   ├── loans
+│   │   │   │   └── [id]
+│   │   │   │       ├── page.tsx
+│   │   │   │       └── schedule
+│   │   │   │           └── page.tsx
+│   │   │   ├── page.tsx
+│   │   │   └── payments
+│   │   │       └── page.tsx
 │   │   ├── lender
 │   │   │   ├── actions
 │   │   │   │   └── page.tsx
@@ -47,8 +56,14 @@ src
 ├── components
 │   ├── common
 │   ├── features
+│   │   ├── admin
+│   │   │   ├── platform-stats.tsx
+│   │   │   ├── quick-actions.tsx
+│   │   │   └── user-management.tsx
 │   │   ├── analytics
 │   │   ├── auth
+│   │   ├── borrower
+│   │   │   └── upcoming-emis.tsx
 │   │   ├── dashboard
 │   │   ├── loans
 │   │   └── users
@@ -73,12 +88,20 @@ src
 │       ├── index.ts
 │       ├── input.tsx
 │       ├── loading.tsx
+│       ├── select.tsx
 │       ├── stats-card.tsx
 │       └── toast.tsx
 ├── lib
 │   ├── api
+│   │   ├── admin
+│   │   │   ├── dashboard.ts
+│   │   │   ├── emis.ts
+│   │   │   ├── index.ts
+│   │   │   ├── loans.ts
+│   │   │   └── users.ts
 │   │   ├── analytics
 │   │   ├── loans
+│   │   ├── types.ts
 │   │   └── users
 │   ├── auth
 │   ├── auth.ts

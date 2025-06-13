@@ -15,8 +15,11 @@ import {
   ArrowLeft,
   Menu,
   X,
+  IndianRupee,
+  Settings2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import DesktopSidebar from './desktop-sidebar'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -47,6 +50,7 @@ export default function DashboardLayout({
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
   const [isSigningOut, setIsSigningOut] = React.useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
 
   console.log('📱 DASHBOARD LAYOUT - Current path:', pathname)
 
@@ -72,9 +76,9 @@ export default function DashboardLayout({
     },
     {
       icon: Zap,
-      label: 'Actions',
-      href: '/dashboard/lender/actions',
-      isActive: pathname.startsWith('/dashboard/lender/actions')
+      label: 'EMIs',
+      href: '/dashboard/lender/emis',
+      isActive: pathname.startsWith('/dashboard/lender/emis')
     },
     {
       icon: User,
@@ -112,34 +116,44 @@ export default function DashboardLayout({
     }
   ]
 
-
-  // Borrower navigation items
+  // Admin navigation items
   const adminNavItems: NavItem[] = [
     {
       icon: Home,
       label: 'Dashboard',
       href: '/dashboard/admin',
-      isActive: pathname === '/dashboard/borrower'
+      isActive: pathname === '/dashboard/admin'
     },
-    {
-      icon: CreditCard,
-      label: 'My Loans',
-      href: '/dashboard/admin/loans',
-      isActive: pathname.startsWith('/dashboard/borrower/loans')
-    },
+
     {
       icon: Users,
-      label: 'Lenders',
-      href: '/dashboard/admin/lenders',
-      isActive: pathname.startsWith('/dashboard/borrower/lenders')
+      label: 'Users',
+      href: '/dashboard/admin/users',
+      isActive: pathname === '/dashboard/admin/users'
     },
+
     {
-      icon: User,
-      label: 'Profile',
-      href: '/dashboard/admin/profile',
-      isActive: pathname.startsWith('/dashboard/borrower/profile')
-    }
+      icon: CreditCard,
+      label: 'Loans',
+      href: '/dashboard/admin/loans',
+      isActive: pathname === '/dashboard/admin/loans'
+    },
+
+    {
+      icon: IndianRupee,
+      label: 'EMIs',
+      href: '/dashboard/admin/emis',
+      isActive: pathname === '/dashboard/admin/emis'
+    },
+
+    {
+      icon: Settings2,
+      label: 'Settings',
+      href: '/dashboard/admin/settings',
+      isActive: pathname === '/dashboard/admin/setting'
+    },
   ]
+
   // Get current navigation items based on user role and current path
   const getCurrentNavItems = (): NavItem[] => {
     // More specific path matching to avoid confusion
@@ -203,45 +217,51 @@ export default function DashboardLayout({
   const getCurrentRole = () => {
     if (pathname.includes('/lender')) return 'Lender'
     if (pathname.includes('/borrower')) return 'Borrower'
+    if (pathname.includes('/admin')) return 'Admin'
     return isLender ? 'Lender' : 'Borrower'
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p className="text-sm text-gray-600">Loading...</p>
+          <div className="flex space-x-1 justify-center mb-4">
+            <div className="loading-dot"></div>
+            <div className="loading-dot"></div>
+            <div className="loading-dot"></div>
+          </div>
+          <p className="text-caption">Loading...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Mobile Header */}
-      <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+      <div className="lg:hidden bg-card shadow-xs border-b border-border sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 py-3">
           {/* Left Section */}
           <div className="flex items-center">
             {showBackButton ? (
               <button
                 onClick={handleBack}
-                className="p-2 -ml-2 rounded-lg hover:bg-gray-100 transition-colors mr-2"
+                className="p-2 -ml-2 rounded-lg hover:bg-accent transition-colors mr-2 interactive-scale"
               >
-                <ArrowLeft className="h-5 w-5 text-gray-600" />
+                <ArrowLeft className="h-5 w-5 text-muted-foreground" />
               </button>
             ) : (
               <div className="flex items-center">
-                <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
-                  {isLender && <Briefcase className="h-4 w-4 text-white" />}
-                  {isBorrower && <User className="h-4 w-4 text-white" />}
+                <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center mr-3">
+                  {isLender && <Briefcase className="h-4 w-4 text-primary-foreground" />}
+                  {isBorrower && <User className="h-4 w-4 text-primary-foreground" />}
+                  {isAdmin && <Users className="h-4 w-4 text-primary-foreground" />}
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-gray-900">
+                  <h1 className="text-title text-foreground">
                     {title || getCurrentRole()}
                   </h1>
-                  <p className="text-xs text-gray-500 -mt-1">
+                  <p className="text-caption -mt-1">
                     {user?.full_name || user?.email}
                   </p>
                 </div>
@@ -255,12 +275,12 @@ export default function DashboardLayout({
             {showMobileMenu && (
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="p-2 rounded-lg hover:bg-accent transition-colors interactive-scale"
               >
                 {isMobileMenuOpen ? (
-                  <X className="h-5 w-5 text-gray-600" />
+                  <X className="h-5 w-5 text-muted-foreground" />
                 ) : (
-                  <Menu className="h-5 w-5 text-gray-600" />
+                  <Menu className="h-5 w-5 text-muted-foreground" />
                 )}
               </button>
             )}
@@ -269,13 +289,13 @@ export default function DashboardLayout({
 
         {/* Mobile Menu Dropdown */}
         {isMobileMenuOpen && (
-          <div className="absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-50">
+          <div className="absolute top-full left-0 right-0 bg-card border-b border-border shadow-lg z-50 animate-enter">
             <div className="px-4 py-3 space-y-1">
               {/* Role Switch Button (if dual role) */}
               {isBoth && (
                 <button
                   onClick={handleRoleSwitch}
-                  className="w-full flex items-center px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="w-full flex items-center px-3 py-2 text-sm text-primary hover:bg-accent rounded-lg transition-colors interactive-scale"
                 >
                   <User className="h-4 w-4 mr-3" />
                   Switch to {pathname.includes('/lender') ? 'Borrower' : 'Lender'} View
@@ -286,7 +306,7 @@ export default function DashboardLayout({
               <button
                 onClick={handleSignOut}
                 disabled={isSigningOut}
-                className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                className="w-full flex items-center px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50 interactive-scale"
               >
                 <LogOut className="h-4 w-4 mr-3" />
                 {isSigningOut ? 'Signing Out...' : 'Sign Out'}
@@ -297,45 +317,51 @@ export default function DashboardLayout({
       </div>
 
       {/* Desktop Header */}
-      <div className="hidden lg:block bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <div className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center mr-4">
-                {isLender && <Briefcase className="h-5 w-5 text-white" />}
-                {isBorrower && <User className="h-5 w-5 text-white" />}
+      <div className="hidden lg:block bg-card shadow-xs border-b border-border fixed top-0 left-0 right-0 z-20">
+        <div className={cn(
+          "transition-all duration-300",
+          sidebarCollapsed ? "xl:ml-16" : "xl:ml-64"
+        )}>
+          <div className="layout-container">
+            <div className="flex justify-between items-center py-6">
+              <div className="flex items-center">
+                <div className="h-12 w-12 bg-primary rounded-xl flex items-center justify-center mr-4 hover-lift">
+                  {isLender && <Briefcase className="h-6 w-6 text-primary-foreground" />}
+                  {isBorrower && <User className="h-6 w-6 text-primary-foreground" />}
+                  {isAdmin && <Users className="h-6 w-6 text-primary-foreground" />}
+                </div>
+                <div>
+                  <h1 className="text-headline text-foreground">
+                    {title || `${getCurrentRole()} Dashboard`}
+                  </h1>
+                  <p className="text-body text-muted-foreground">
+                    Welcome, {user?.full_name || user?.email}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {title || `${getCurrentRole()} Dashboard`}
-                </h1>
-                <p className="text-sm text-gray-600">
-                  Welcome, {user?.full_name || user?.email}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center space-x-4">
-              {customHeader}
-              
-              {isBoth && (
+              <div className="flex items-center space-x-4">
+                {customHeader}
+                
+                {isBoth && (
+                  <button
+                    onClick={handleRoleSwitch}
+                    className="inline-flex items-center bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:bg-primary/90 transition-all duration-200 font-medium hover-lift interactive-scale"
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    Switch to {pathname.includes('/lender') ? 'Borrower' : 'Lender'}
+                  </button>
+                )}
+
                 <button
-                  onClick={handleRoleSwitch}
-                  className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                  className="inline-flex items-center bg-destructive text-destructive-foreground px-6 py-3 rounded-lg hover:bg-destructive/90 disabled:opacity-50 transition-all duration-200 font-medium hover-lift interactive-scale"
                 >
-                  <User className="h-4 w-4 mr-2" />
-                  Switch to {pathname.includes('/lender') ? 'Borrower' : 'Lender'}
+                  <LogOut className="h-4 w-4 mr-2" />
+                  {isSigningOut ? 'Signing Out...' : 'Sign Out'}
                 </button>
-              )}
-
-              <button
-                onClick={handleSignOut}
-                disabled={isSigningOut}
-                className="inline-flex items-center bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                {isSigningOut ? 'Signing Out...' : 'Sign Out'}
-              </button>
+              </div>
             </div>
           </div>
         </div>
@@ -343,13 +369,19 @@ export default function DashboardLayout({
 
       {/* Main Content - Fixed Desktop Sidebar Overlap */}
       <div className="flex-1">
-        <main className="pb-20 lg:pb-0 xl:ml-64 transition-all duration-300">
-          {children}
+        <main className={cn(
+          "pb-20 lg:pb-0 transition-all duration-300",
+          "lg:pt-24", // Account for fixed header
+          sidebarCollapsed ? "xl:ml-16" : "xl:ml-64"
+        )}>
+          <div className="layout-container py-6">
+            {children}
+          </div>
         </main>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40 safe-area-pb">
         <div className="grid grid-cols-5 md:grid-cols-4">
           {navItems.map((item) => {
             const Icon = item.icon
@@ -358,28 +390,31 @@ export default function DashboardLayout({
                 key={item.href}
                 onClick={() => handleNavigation(item.href)}
                 className={cn(
-                  "flex flex-col items-center justify-center py-2 px-1 min-h-[60px] transition-colors relative",
+                  "flex flex-col items-center justify-center py-3 px-1 min-h-[64px] transition-all duration-200 relative interactive-scale",
                   item.isActive
-                    ? "text-blue-600 bg-blue-50"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                    ? "text-primary bg-primary/5"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 )}
               >
                 {/* Active indicator */}
                 {item.isActive && (
-                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-blue-600 rounded-full" />
+                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-primary rounded-full" />
                 )}
                 
-                <Icon className={cn("h-5 w-5 mb-1", item.isActive && "text-blue-600")} />
+                <Icon className={cn(
+                  "h-5 w-5 mb-1 transition-all duration-200", 
+                  item.isActive && "text-primary scale-110"
+                )} />
                 <span className={cn(
                   "text-xs font-medium leading-tight",
-                  item.isActive && "text-blue-600"
+                  item.isActive && "text-primary"
                 )}>
                   {item.label}
                 </span>
                 
                 {/* Badge */}
                 {item.badge && item.badge > 0 && (
-                  <div className="absolute top-1 right-1/4 bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                  <div className="absolute top-2 right-1/4 bg-destructive text-destructive-foreground text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 font-medium shadow-sm">
                     {item.badge > 99 ? '99+' : item.badge}
                   </div>
                 )}
@@ -389,37 +424,14 @@ export default function DashboardLayout({
         </div>
       </div>
 
-      {/* Desktop Sidebar (for larger screens) - Fixed Positioning */}
-      <div className="hidden xl:block fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-gray-200 z-30">
-        <div className="pt-20"> {/* Space for fixed header */}
-          <nav className="px-4 py-6 space-y-2">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <button
-                  key={item.href}
-                  onClick={() => handleNavigation(item.href)}
-                  className={cn(
-                    "w-full flex items-center px-4 py-3 text-left rounded-lg transition-colors",
-                    item.isActive
-                      ? "bg-blue-50 text-blue-600 border border-blue-200"
-                      : "text-gray-700 hover:bg-gray-50"
-                  )}
-                >
-                  <Icon className={cn("h-5 w-5 mr-3", item.isActive && "text-blue-600")} />
-                  <span className="font-medium">{item.label}</span>
-                  {item.badge && item.badge > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-2">
-                      {item.badge > 99 ? '99+' : item.badge}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </nav>
-        </div>
+      {/* Desktop Sidebar Component */}
+      <div className="hidden xl:block">
+        <DesktopSidebar 
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={setSidebarCollapsed}
+          className="fixed left-0 top-0 bottom-0 z-30"
+        />
       </div>
-
     </div>
   )
 }

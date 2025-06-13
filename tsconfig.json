@@ -28,7 +28,7 @@
       "@/styles/*": ["./src/styles/*"],
       "@/assets/*": ["./src/assets/*"]
     },
-    "target": "es5",
+    "target": "es2015",
     "forceConsistentCasingInFileNames": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
@@ -40,7 +40,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "src/**/*"
-, "next.config.js"  ],
+, "next.config.js", "tailwind.config.js"  ],
   "exclude": [
     "node_modules"
   ]

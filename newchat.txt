@@ -1,49 +1,286 @@
-# 📋 **MicroLoan Manager - Implementation Summary**
+| table_name          |
+| ------------------- |
+| emis                |
+| loans               |
+| payments            |
+| loan_schedules      |
+| documents           |
+| email_verifications |
+| user_profiles       |
+| borrowers           |
+| loan_products       |
+| users               |
+| loan_applications   |
 
-## 🏗️ **What We Built:**
-Enterprise-grade micro loan management platform with **multi-tenant support**.
 
-## 🎯 **Key Features Implemented:**
+## All Tables and Columns : 
 
-### **1. Multi-Tenant Architecture**
-- ✅ **Same borrower can work with multiple lenders**
-- ✅ **Same person can be both borrower AND lender** 
-- ✅ **Independent lender operations** (like KhataBook model)
+| table_name               | column_name             | data_type                   |
+| ------------------------ | ----------------------- | --------------------------- |
+| borrowers                | id                      | uuid                        |
+| borrowers                | user_id                 | uuid                        |
+| borrowers                | credit_score            | integer                     |
+| borrowers                | employment_type         | character varying           |
+| borrowers                | monthly_income          | numeric                     |
+| borrowers                | lender_id               | uuid                        |
+| borrowers                | created_at              | timestamp with time zone    |
+| borrowers                | updated_at              | timestamp with time zone    |
+| borrowers                | deleted_at              | timestamp with time zone    |
+| documents                | id                      | uuid                        |
+| documents                | borrower_id             | uuid                        |
+| documents                | document_type           | USER-DEFINED                |
+| documents                | file_url                | text                        |
+| documents                | verification_status     | USER-DEFINED                |
+| documents                | verified_by             | uuid                        |
+| documents                | verified_at             | timestamp with time zone    |
+| documents                | created_at              | timestamp with time zone    |
+| documents                | updated_at              | timestamp with time zone    |
+| email_verifications      | id                      | uuid                        |
+| email_verifications      | user_id                 | uuid                        |
+| email_verifications      | verification_token      | uuid                        |
+| email_verifications      | email                   | character varying           |
+| email_verifications      | verified_at             | timestamp with time zone    |
+| email_verifications      | expires_at              | timestamp with time zone    |
+| email_verifications      | attempts                | integer                     |
+| email_verifications      | created_at              | timestamp with time zone    |
+| email_verifications      | updated_at              | timestamp with time zone    |
+| emis                     | id                      | uuid                        |
+| emis                     | loan_id                 | uuid                        |
+| emis                     | emi_number              | integer                     |
+| emis                     | due_date                | date                        |
+| emis                     | amount                  | numeric                     |
+| emis                     | status                  | USER-DEFINED                |
+| emis                     | paid_date               | date                        |
+| emis                     | paid_amount             | numeric                     |
+| emis                     | created_at              | timestamp with time zone    |
+| emis                     | updated_at              | timestamp with time zone    |
+| emis                     | principal_amount        | numeric                     |
+| emis                     | interest_amount         | numeric                     |
+| emis                     | late_fee                | numeric                     |
+| emis                     | penalty_amount          | numeric                     |
+| emis                     | outstanding_balance     | numeric                     |
+| emis                     | payment_status          | character varying           |
+| emis                     | days_overdue            | integer                     |
+| loan_applications        | id                      | uuid                        |
+| loan_applications        | borrower_id             | uuid                        |
+| loan_applications        | lender_id               | uuid                        |
+| loan_applications        | loan_product_id         | uuid                        |
+| loan_applications        | requested_amount        | numeric                     |
+| loan_applications        | requested_tenure_value  | integer                     |
+| loan_applications        | requested_tenure_unit   | character varying           |
+| loan_applications        | purpose                 | text                        |
+| loan_applications        | application_status      | character varying           |
+| loan_applications        | reviewed_by             | uuid                        |
+| loan_applications        | reviewed_at             | timestamp without time zone |
+| loan_applications        | review_notes            | text                        |
+| loan_applications        | loan_id                 | uuid                        |
+| loan_applications        | created_at              | timestamp without time zone |
+| loan_applications        | updated_at              | timestamp without time zone |
+| loan_details             | id                      | uuid                        |
+| loan_details             | loan_number             | character varying           |
+| loan_details             | borrower_id             | uuid                        |
+| loan_details             | borrower_name           | character varying           |
+| loan_details             | borrower_email          | character varying           |
+| loan_details             | principal_amount        | numeric                     |
+| loan_details             | interest_rate           | numeric                     |
+| loan_details             | tenure_value            | integer                     |
+| loan_details             | tenure_unit             | character varying           |
+| loan_details             | loan_type               | character varying           |
+| loan_details             | repayment_frequency     | character varying           |
+| loan_details             | total_amount            | numeric                     |
+| loan_details             | status                  | character varying           |
+| loan_details             | disbursement_date       | date                        |
+| loan_details             | maturity_date           | date                        |
+| loan_details             | lender_id               | uuid                        |
+| loan_details             | lender_name             | character varying           |
+| loan_details             | created_at              | timestamp without time zone |
+| loan_details             | updated_at              | timestamp without time zone |
+| loan_products            | id                      | uuid                        |
+| loan_products            | name                    | character varying           |
+| loan_products            | min_amount              | numeric                     |
+| loan_products            | max_amount              | numeric                     |
+| loan_products            | min_tenure_days         | integer                     |
+| loan_products            | max_tenure_days         | integer                     |
+| loan_products            | interest_rate           | numeric                     |
+| loan_products            | late_fee_rate           | numeric                     |
+| loan_products            | processing_fee_rate     | numeric                     |
+| loan_products            | repayment_frequency     | character varying           |
+| loan_products            | loan_type               | character varying           |
+| loan_products            | active                  | boolean                     |
+| loan_products            | created_at              | timestamp without time zone |
+| loan_products            | updated_at              | timestamp without time zone |
+| loan_schedules           | id                      | uuid                        |
+| loan_schedules           | loan_id                 | uuid                        |
+| loan_schedules           | emi_number              | integer                     |
+| loan_schedules           | due_date                | date                        |
+| loan_schedules           | principal_amount        | numeric                     |
+| loan_schedules           | interest_amount         | numeric                     |
+| loan_schedules           | total_amount            | numeric                     |
+| loan_schedules           | outstanding_balance     | numeric                     |
+| loan_schedules           | created_at              | timestamp without time zone |
+| loans                    | id                      | uuid                        |
+| loans                    | loan_number             | character varying           |
+| loans                    | borrower_id             | uuid                        |
+| loans                    | principal_amount        | numeric                     |
+| loans                    | interest_rate           | numeric                     |
+| loans                    | tenure_value            | integer                     |
+| loans                    | tenure_unit             | character varying           |
+| loans                    | loan_type               | character varying           |
+| loans                    | repayment_frequency     | character varying           |
+| loans                    | total_amount            | numeric                     |
+| loans                    | status                  | character varying           |
+| loans                    | disbursement_date       | date                        |
+| loans                    | maturity_date           | date                        |
+| loans                    | created_by              | uuid                        |
+| loans                    | approved_by             | uuid                        |
+| loans                    | approved_at             | timestamp without time zone |
+| loans                    | disbursed_at            | timestamp without time zone |
+| loans                    | late_fee_rate           | numeric                     |
+| loans                    | grace_period_days       | integer                     |
+| loans                    | notes                   | text                        |
+| loans                    | created_at              | timestamp without time zone |
+| loans                    | updated_at              | timestamp without time zone |
+| loans                    | lender_id               | uuid                        |
+| payments                 | id                      | uuid                        |
+| payments                 | loan_id                 | uuid                        |
+| payments                 | amount                  | numeric                     |
+| payments                 | payment_date            | date                        |
+| payments                 | payment_method          | USER-DEFINED                |
+| payments                 | reference_number        | character varying           |
+| payments                 | notes                   | text                        |
+| payments                 | recorded_by             | uuid                        |
+| payments                 | created_at              | timestamp with time zone    |
+| payments                 | updated_at              | timestamp with time zone    |
+| payments                 | emi_id                  | uuid                        |
+| payments                 | payment_reference       | character varying           |
+| payments                 | late_fee_paid           | numeric                     |
+| payments                 | penalty_paid            | numeric                     |
+| payments                 | payment_status          | character varying           |
+| pending_lender_approvals | id                      | uuid                        |
+| pending_lender_approvals | email                   | character varying           |
+| pending_lender_approvals | full_name               | character varying           |
+| pending_lender_approvals | phone                   | character varying           |
+| pending_lender_approvals | created_at              | timestamp with time zone    |
+| pending_lender_approvals | email_verified_at       | timestamp with time zone    |
+| user_profiles            | id                      | uuid                        |
+| user_profiles            | user_id                 | uuid                        |
+| user_profiles            | avatar_url              | text                        |
+| user_profiles            | address                 | text                        |
+| user_profiles            | kyc_status              | USER-DEFINED                |
+| user_profiles            | created_at              | timestamp with time zone    |
+| user_profiles            | updated_at              | timestamp with time zone    |
+| users                    | id                      | uuid                        |
+| users                    | email                   | character varying           |
+| users                    | role                    | USER-DEFINED                |
+| users                    | phone                   | character varying           |
+| users                    | full_name               | character varying           |
+| users                    | created_at              | timestamp with time zone    |
+| users                    | updated_at              | timestamp with time zone    |
+| users                    | deleted_at              | timestamp with time zone    |
+| users                    | active                  | boolean                     |
+| users                    | email_verified          | boolean                     |
+| users                    | verification_token      | uuid                        |
+| users                    | verification_expires_at | timestamp with time zone    |
+| users                    | pending_approval        | boolean                     |
+| users                    | roles                   | ARRAY                       |
+| users                    | is_super_admin          | boolean                     |
 
-### **2. Database Enhancements**
-- ✅ **Enhanced `loans` table** with `lender_id` column
-- ✅ **Multi-role support** with `users.roles[]` array
-- ✅ **Backward compatibility** maintained
 
-### **3. Role Management System**
-- ✅ **"Become Lender" button** for borrowers → upgrades to dual role
-- ✅ **"Switch View" buttons** in headers for dual-role users
-- ✅ **Smart dashboard routing** based on user roles
-- ✅ **Automatic role assignment** when creating loans
+##RLS POLICIES : 
 
-### **4. Enhanced Forms**
-- ✅ **AddBorrowerForm** supports existing users (multi-tenant validation)
-- ✅ **CreateLoanForm** with unique loan number generation
-- ✅ **RecordPaymentForm** with flexible payment handling
+| schemaname | tablename           | policyname                               | permissive | roles                             | cmd    | qual                                                                                                                                                                                                                                                                                         | with_check                                                                                                                                                                                |
+| ---------- | ------------------- | ---------------------------------------- | ---------- | --------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| public     | users               | allow_all_inserts                        | PERMISSIVE | {anon,authenticated,service_role} | INSERT | null                                                                                                                                                                                                                                                                                         | true                                                                                                                                                                                      |
+| public     | users               | allow_all_selects                        | PERMISSIVE | {anon,authenticated,service_role} | SELECT | true                                                                                                                                                                                                                                                                                         | null                                                                                                                                                                                      |
+| public     | users               | allow_all_updates                        | PERMISSIVE | {anon,authenticated,service_role} | UPDATE | true                                                                                                                                                                                                                                                                                         | true                                                                                                                                                                                      |
+| public     | borrowers           | super_admin_can_view_all_borrowers       | PERMISSIVE | {public}                          | ALL    | (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.role = 'super_admin'::user_role))))                                                                                                                                                                             | null                                                                                                                                                                                      |
+| public     | loans               | loans_lender_access                      | PERMISSIVE | {public}                          | ALL    | (created_by = auth.uid())                                                                                                                                                                                                                                                                    | null                                                                                                                                                                                      |
+| public     | borrowers           | borrowers_can_view_own_record            | PERMISSIVE | {public}                          | SELECT | (user_id = auth.uid())                                                                                                                                                                                                                                                                       | null                                                                                                                                                                                      |
+| public     | loans               | loans_borrower_view                      | PERMISSIVE | {public}                          | SELECT | (borrower_id IN ( SELECT borrowers.user_id
+   FROM borrowers
+  WHERE (borrowers.user_id = auth.uid())))                                                                                                                                                                                      | null                                                                                                                                                                                      |
+| public     | emis                | super_admin_can_view_all_emis            | PERMISSIVE | {public}                          | ALL    | (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.role = 'super_admin'::user_role))))                                                                                                                                                                             | null                                                                                                                                                                                      |
+| public     | loan_products       | loan_products_read                       | PERMISSIVE | {public}                          | SELECT | (auth.role() = 'authenticated'::text)                                                                                                                                                                                                                                                        | null                                                                                                                                                                                      |
+| public     | emis                | emis_access                              | PERMISSIVE | {public}                          | ALL    | (loan_id IN ( SELECT loans.id
+   FROM loans
+  WHERE ((loans.created_by = auth.uid()) OR (loans.borrower_id = auth.uid()))))                                                                                                                                                                  | null                                                                                                                                                                                      |
+| public     | payments            | payments_access                          | PERMISSIVE | {public}                          | ALL    | (loan_id IN ( SELECT loans.id
+   FROM loans
+  WHERE ((loans.created_by = auth.uid()) OR (loans.borrower_id = auth.uid()))))                                                                                                                                                                  | null                                                                                                                                                                                      |
+| public     | payments            | super_admin_can_manage_all_payments      | PERMISSIVE | {public}                          | ALL    | (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.role = 'super_admin'::user_role))))                                                                                                                                                                             | null                                                                                                                                                                                      |
+| public     | loan_applications   | loan_applications_lender_access          | PERMISSIVE | {public}                          | ALL    | (lender_id = auth.uid())                                                                                                                                                                                                                                                                     | null                                                                                                                                                                                      |
+| public     | documents           | super_admin_can_manage_all_documents     | PERMISSIVE | {public}                          | ALL    | (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.role = 'super_admin'::user_role))))                                                                                                                                                                             | null                                                                                                                                                                                      |
+| public     | loan_applications   | loan_applications_borrower_view          | PERMISSIVE | {public}                          | SELECT | (borrower_id = auth.uid())                                                                                                                                                                                                                                                                   | null                                                                                                                                                                                      |
+| public     | documents           | borrowers_can_manage_own_documents       | PERMISSIVE | {public}                          | ALL    | (EXISTS ( SELECT 1
+   FROM borrowers
+  WHERE ((borrowers.id = documents.borrower_id) AND (borrowers.user_id = auth.uid()))))                                                                                                                                                                 | null                                                                                                                                                                                      |
+| public     | loan_schedules      | loan_schedules_access                    | PERMISSIVE | {public}                          | ALL    | (loan_id IN ( SELECT loans.id
+   FROM loans
+  WHERE ((loans.created_by = auth.uid()) OR (loans.borrower_id = auth.uid()))))                                                                                                                                                                  | null                                                                                                                                                                                      |
+| public     | user_profiles       | super_admin_can_view_all_profiles        | PERMISSIVE | {public}                          | SELECT | (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.role = 'super_admin'::user_role))))                                                                                                                                                                             | null                                                                                                                                                                                      |
+| public     | loans               | Users can view own loans                 | PERMISSIVE | {public}                          | SELECT | (created_by = auth.uid())                                                                                                                                                                                                                                                                    | null                                                                                                                                                                                      |
+| public     | loans               | admin_all_access_loans                   | PERMISSIVE | {authenticated}                   | ALL    | (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.role = 'super_admin'::user_role))))                                                                                                                                                                             | null                                                                                                                                                                                      |
+| public     | user_profiles       | users_can_manage_own_profile             | PERMISSIVE | {public}                          | ALL    | (user_id = auth.uid())                                                                                                                                                                                                                                                                       | null                                                                                                                                                                                      |
+| public     | user_profiles       | lenders_can_manage_borrower_profiles     | PERMISSIVE | {public}                          | ALL    | ((EXISTS ( SELECT 1
+   FROM borrowers
+  WHERE ((borrowers.user_id = user_profiles.user_id) AND (borrowers.lender_id = auth.uid())))) AND (EXISTS ( SELECT 1
+   FROM users current_app_user
+  WHERE ((current_app_user.id = auth.uid()) AND (current_app_user.role = 'lender'::user_role))))) | null                                                                                                                                                                                      |
+| public     | user_profiles       | super_admin_can_manage_all_profiles      | PERMISSIVE | {public}                          | ALL    | (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.role = 'super_admin'::user_role))))                                                                                                                                                                             | null                                                                                                                                                                                      |
+| public     | user_profiles       | allow_profile_creation_for_new_borrowers | PERMISSIVE | {public}                          | INSERT | null                                                                                                                                                                                                                                                                                         | (EXISTS ( SELECT 1
+   FROM users current_app_user
+  WHERE ((current_app_user.id = auth.uid()) AND (current_app_user.role = ANY (ARRAY['lender'::user_role, 'super_admin'::user_role]))))) |
+| public     | emis                | admin_all_access_emis                    | PERMISSIVE | {authenticated}                   | ALL    | (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND ((users.email)::text = 'aarje2050@gmail.com'::text))))                                                                                                                                                                 | null                                                                                                                                                                                      |
+| public     | email_verifications | users_can_manage_own_verification        | PERMISSIVE | {public}                          | ALL    | ((user_id = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.role = 'super_admin'::user_role) AND (users.active = true)))))                                                                                                                       | null                                                                                                                                                                                      |
+| public     | email_verifications | manage_own_verification                  | PERMISSIVE | {public}                          | ALL    | (user_id = auth.uid())                                                                                                                                                                                                                                                                       | null                                                                                                                                                                                      |
+| public     | borrowers           | borrowers_access                         | PERMISSIVE | {public}                          | ALL    | ((user_id = auth.uid()) OR (lender_id = auth.uid()))                                                                                                                                                                                                                                         | null                                                                                                                                                                                      |
+| public     | documents           | documents_access                         | PERMISSIVE | {public}                          | ALL    | (EXISTS ( SELECT 1
+   FROM borrowers
+  WHERE ((borrowers.id = documents.borrower_id) AND ((borrowers.user_id = auth.uid()) OR (borrowers.lender_id = auth.uid())))))                                                                                                                         | null                                                                                                                                                                                      |
+| public     | user_profiles       | user_profiles_access                     | PERMISSIVE | {public}                          | ALL    | ((user_id = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM borrowers
+  WHERE ((borrowers.user_id = user_profiles.user_id) AND (borrowers.lender_id = auth.uid())))))                                                                                                                              | null                                                                                                                                                                                      |
 
-### **5. Working Dashboards**
-- ✅ **Borrower Dashboard** - view loans, EMI schedules, payments
-- ✅ **Lender Dashboard** - manage borrowers, create loans, track portfolio
-- ✅ **Role switching** between views for dual-role users
 
-## 🔧 **Technical Stack:**
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
-- **Backend**: Supabase (PostgreSQL + Auth)
-- **State**: Zustand for auth management
-- **Architecture**: Multi-tenant, role-based access control
 
-## 🎯 **Current Status:**
-Fully functional multi-tenant loan management system where friends can independently use the platform as lenders, borrowers can work with multiple lenders, and users can upgrade between roles seamlessly.
 
-## 📁 **Key Files Modified:**
-- `lib/auth.ts` - Enhanced multi-role auth system
-- `dashboard/page.tsx` - Smart role-based routing  
-- `components/forms/add-borrower-form.tsx` - Multi-tenant validation
-- Database schema - Added `lender_id`, `roles[]` support
+  Foreign Relations : 
 
-**Ready for production use with enterprise-grade error handling and user experience!** 🚀
+  | source_table        | source_column   | target_table  | target_column |
+| ------------------- | --------------- | ------------- | ------------- |
+| user_profiles       | user_id         | users         | id            |
+| borrowers           | user_id         | users         | id            |
+| borrowers           | lender_id       | users         | id            |
+| payments            | recorded_by     | users         | id            |
+| documents           | borrower_id     | borrowers     | id            |
+| documents           | verified_by     | users         | id            |
+| email_verifications | user_id         | users         | id            |
+| loans               | created_by      | users         | id            |
+| loans               | approved_by     | users         | id            |
+| loans               | borrower_id     | borrowers     | user_id       |
+| loan_applications   | borrower_id     | borrowers     | user_id       |
+| loan_applications   | lender_id       | users         | id            |
+| loan_applications   | loan_product_id | loan_products | id            |
+| loan_applications   | reviewed_by     | users         | id            |
+| loan_applications   | loan_id         | loans         | id            |
+| loan_schedules      | loan_id         | loans         | id            |
+| payments            | emi_id          | emis          | id            |
+| loans               | lender_id       | users         | id            |

@@ -5,6 +5,12 @@ import React from 'react'
 import { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+interface TrendData {
+  value: string | number
+  label?: string
+  positive?: boolean
+}
+
 interface StatsCardProps {
   title: string
   value: string | number
@@ -15,6 +21,9 @@ interface StatsCardProps {
   loading?: boolean
   subtitle?: string
   color?: string
+  trend?: TrendData
+  variant?: string
+  description?: string
 }
 
 export function StatsCard({

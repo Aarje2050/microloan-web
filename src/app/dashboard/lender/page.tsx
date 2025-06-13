@@ -1,4 +1,4 @@
-// app/dashboard/lender/page.tsx - MOBILE-FIRST LENDER DASHBOARD
+// app/dashboard/lender/page.tsx - PROFESSIONAL LENDER DASHBOARD
 "use client";
 
 import React from "react";
@@ -7,28 +7,29 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import DashboardLayout from "@/components/layout/dashboard-layout";
 import {
-  Briefcase,
   Users,
-  User,
   CreditCard,
+  Calendar,
   DollarSign,
   Plus,
-  TrendingUp,
   Eye,
   Receipt,
-  ArrowUp,
-  ArrowDown,
-  Clock,
-  CheckCircle,
-  AlertCircle,
   RefreshCw,
-  IndianRupee
+  ArrowRight,
+  Phone,
+  Mail,
+  User,
+  TrendingUp,
+  TrendingDown,
+  X
 } from "lucide-react";
-import { StatsCard } from "@/components/ui/stats-card";
-import { LoanCard, BorrowerCard, SectionContainer } from "@/components/ui/enterprise-cards";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import AddBorrowerForm from "@/components/forms/add-borrower-form";
 import CreateLoanForm from "@/components/forms/loan/create-loan-form";
 import RecordPaymentForm from "@/components/forms/loan/record-payment-form";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 
 interface Borrower {
   id: string;
@@ -59,33 +60,649 @@ interface LoanSummary {
   next_due_amount: number;
 }
 
+interface DashboardStats {
+  totalBorrowers: number;
+  activeLoans: number;
+  dueEmis: number;
+  totalLoanAmount: number;
+}
+
 type ViewMode = "dashboard" | "add-borrower" | "create-loan" | "record-payment";
+
+interface StatsCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
+  loading?: boolean;
+  onClick?: () => void;
+  subtitle?: string;
+}
+
+function StatsCard({ title, value, icon: Icon, loading, onClick, subtitle }: StatsCardProps) {
+  const isClickable = !!onClick;
+  
+  return (
+    <Card 
+      className={`bg-white border border-gray-200 hover:shadow-md transition-all duration-200 ${
+        isClickable ? 'cursor-pointer hover:border-blue-300' : ''
+      }`}
+      onClick={onClick}
+    >
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="flex items-center space-x-3 mb-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Icon className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">{title}</p>
+                {subtitle && (
+                  <p className="text-xs text-gray-500">{subtitle}</p>
+                )}
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 bg-gray-200 rounded animate-pulse w-20"></div>
+            ) : (
+              <p className="text-2xl font-bold text-gray-900">{value}</p>
+            )}
+          </div>
+          {isClickable && (
+            <ArrowRight className="h-5 w-5 text-gray-400" />
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface LoanDetailsModalProps {
+  loan: LoanSummary | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onRecordPayment: (loanId: string) => void;
+}
+
+function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment }: LoanDetailsModalProps) {
+  if (!isOpen || !loan) return null;
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active': return 'bg-green-100 text-green-800 border-green-200';
+      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'overdue': return 'bg-red-100 text-red-800 border-red-200';
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const progressPercentage = loan.total_emis > 0 ? (loan.paid_emis / loan.total_emis) * 100 : 0;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header */}
+        <div className="border-b border-gray-200 px-4 sm:px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">{loan.loan_number}</h3>
+              <p className="text-sm text-gray-500 mt-1">Loan Details & Progress</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="h-5 w-5 text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 sm:p-6 space-y-6">
+          {/* Status and Basic Info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</label>
+              <div className="mt-2">
+                <span className={cn(
+                  'px-3 py-1.5 text-sm font-medium rounded-full border',
+                  getStatusColor(loan.status)
+                )}>
+                  {loan.status.toUpperCase()}
+                </span>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</label>
+              <p className="text-lg font-semibold text-gray-900 mt-2">
+                {Math.round(progressPercentage)}% Complete
+              </p>
+            </div>
+          </div>
+
+          {/* Financial Details */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-4">Financial Overview</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <DollarSign className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Principal</span>
+                </div>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(loan.principal_amount)}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <TrendingUp className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</span>
+                </div>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(loan.total_amount)}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <TrendingDown className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</span>
+                </div>
+                <p className={cn(
+                  "text-xl font-bold",
+                  loan.outstanding_balance > 0 ? "text-red-600" : "text-green-600"
+                )}>
+                  {formatCurrency(loan.outstanding_balance)}
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Disbursed</span>
+                </div>
+                <p className="text-lg font-bold text-gray-900">{formatDate(loan.disbursement_date)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* EMI Progress */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-4">EMI Progress</h4>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <div className="flex justify-between text-sm mb-3">
+                <span className="text-gray-600">Progress</span>
+                <span className="font-medium text-gray-900">
+                  {loan.paid_emis}/{loan.total_emis} EMIs ({Math.round(progressPercentage)}%)
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-3">
+                <div 
+                  className="bg-blue-600 h-3 rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercentage}%` }}
+                ></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 mb-1">Paid EMIs</p>
+                  <p className="text-lg font-bold text-green-600">{loan.paid_emis}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 mb-1">Pending EMIs</p>
+                  <p className="text-lg font-bold text-orange-600">{loan.pending_emis}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Borrower Information */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-4">Borrower Information</h4>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <User className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{loan.borrower_name}</p>
+                  <p className="text-sm text-gray-600">Loan Borrower</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Next EMI Information */}
+          {loan.next_due_date && loan.status === 'active' && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-4">Next EMI</h4>
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-orange-900">
+                      Due Date: {formatDate(loan.next_due_date)}
+                    </p>
+                    <p className="text-xs text-orange-700 mt-1">
+                      Amount: {formatCurrency(loan.next_due_amount)}
+                    </p>
+                  </div>
+                  <Calendar className="h-6 w-6 text-orange-600" />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="border-t border-gray-200 px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 h-10"
+            >
+              Close
+            </Button>
+            {loan.status === 'active' && (
+              <Button
+                onClick={() => {
+                  onClose();
+                  onRecordPayment(loan.id);
+                }}
+                className="flex-1 h-10"
+              >
+                <Receipt className="h-4 w-4 mr-2" />
+                Record Payment
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface BorrowerDetailsModalProps {
+  borrower: Borrower | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateLoan: (borrowerId: string) => void;
+}
+
+function BorrowerDetailsModal({ borrower, isOpen, onClose, onCreateLoan }: BorrowerDetailsModalProps) {
+  if (!isOpen || !borrower) return null;
+
+  const getKycStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'verified': return 'bg-green-100 text-green-800 border-green-200';
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header */}
+        <div className="border-b border-gray-200 px-4 sm:px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-lg">
+                  {borrower.full_name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">{borrower.full_name}</h3>
+                <p className="text-sm text-gray-500">Borrower Details</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="h-5 w-5 text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 sm:p-6 space-y-6">
+          {/* Contact Information */}
+          <div>
+            <h4 className="text-sm font-bold text-gray-900 mb-4">Contact Information</h4>
+            <div className="space-y-3 bg-gray-50 rounded-xl p-4">
+              <div className="flex items-center space-x-3">
+                <Mail className="h-5 w-5 text-gray-400" />
+                <span className="text-sm text-gray-900 break-all font-medium">{borrower.email}</span>
+              </div>
+              {borrower.phone && borrower.phone !== 'N/A' && (
+                <div className="flex items-center space-x-3">
+                  <Phone className="h-5 w-5 text-gray-400" />
+                  <span className="text-sm text-gray-900 font-medium">{borrower.phone}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Financial Information */}
+          <div>
+            <h4 className="text-sm font-bold text-gray-900 mb-4">Financial Profile</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <DollarSign className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Income</span>
+                </div>
+                <p className="text-lg font-bold text-gray-900">
+                  {borrower.monthly_income ? formatCurrency(borrower.monthly_income) : 'Not provided'}
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <TrendingUp className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Score</span>
+                </div>
+                <p className="text-lg font-bold text-gray-900">
+                  {borrower.credit_score || 'Not available'}
+                </p>
+              </div>
+              {borrower.employment_type && (
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <User className="h-4 w-4 text-gray-400" />
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Employment Type</span>
+                  </div>
+                  <p className="text-lg font-bold text-gray-900 capitalize">{borrower.employment_type}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* KYC Status */}
+          <div>
+            <h4 className="text-sm font-bold text-gray-900 mb-4">Verification Status</h4>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-2">KYC Status</p>
+                  <span className={cn(
+                    'px-3 py-1.5 text-sm font-medium rounded-full border',
+                    getKycStatusColor(borrower.kyc_status)
+                  )}>
+                    {borrower.kyc_status.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Account Details */}
+          <div>
+            <h4 className="text-sm font-bold text-gray-900 mb-4">Account Information</h4>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Added On</span>
+              </div>
+              <p className="text-sm font-bold text-gray-900">{formatDate(borrower.created_at)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="border-t border-gray-200 px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 h-10"
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                onClose();
+                onCreateLoan(borrower.user_id);
+              }}
+              className="flex-1 h-10"
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              Create Loan
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+interface LoanCardProps {
+  loan: LoanSummary;
+  onRecordPayment: (loanId: string) => void;
+  onViewDetails: (loan: LoanSummary) => void;
+}
+
+function LoanCard({ loan, onRecordPayment, onViewDetails }: LoanCardProps) {
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'completed': return 'bg-blue-100 text-blue-800';
+      case 'overdue': return 'bg-red-100 text-red-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const progressPercentage = loan.total_emis > 0 ? (loan.paid_emis / loan.total_emis) * 100 : 0;
+
+  return (
+    <Card className="bg-white border border-gray-200 hover:shadow-md transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <div className="flex items-center space-x-3 mb-2">
+              <h3 className="font-semibold text-gray-900">{loan.loan_number}</h3>
+              <Badge className={getStatusColor(loan.status)}>
+                {loan.status.toUpperCase()}
+              </Badge>
+            </div>
+            <p className="text-sm text-gray-600 font-medium">{loan.borrower_name}</p>
+            <p className="text-xs text-gray-500">Disbursed: {formatDate(loan.disbursement_date)}</p>
+          </div>
+          <button
+            onClick={() => onViewDetails(loan)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Eye className="h-4 w-4 text-gray-400" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Principal</p>
+            <p className="text-lg font-bold text-gray-900">{formatCurrency(loan.principal_amount)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Outstanding</p>
+            <p className="text-lg font-bold text-red-600">{formatCurrency(loan.outstanding_balance)}</p>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">EMI Progress</span>
+            <span className="text-xs font-bold text-gray-900">
+              {loan.paid_emis}/{loan.total_emis} ({Math.round(progressPercentage)}%)
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+              style={{ width: `${progressPercentage}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {loan.next_due_date && (
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-orange-900">Next EMI Due</p>
+                <p className="text-xs text-orange-700">{formatDate(loan.next_due_date)}</p>
+              </div>
+              <p className="text-sm font-bold text-orange-900">{formatCurrency(loan.next_due_amount)}</p>
+            </div>
+          </div>
+        )}
+
+<div className="flex space-x-3">
+  <Button
+    size="sm"
+    variant="outline"
+    onClick={() => onViewDetails(loan)}
+    className="flex items-center justify-center px-4 gap-2 h-9 text-sm font-medium"
+  >
+    
+    View Details
+  </Button>
+
+  <Button
+    size="sm"
+    onClick={() => onRecordPayment(loan.id)}
+    className="flex items-center justify-center px-4 gap-2 h-9 text-sm font-medium"
+  >
+    Record Payment
+  </Button>
+</div>
+
+      </CardContent>
+    </Card>
+  );
+}
+
+interface BorrowerCardProps {
+  borrower: Borrower;
+  onCreateLoan: (borrowerId: string) => void;
+  onViewDetails: (borrower: Borrower) => void;
+}
+
+function BorrowerCard({ borrower, onCreateLoan, onViewDetails }: BorrowerCardProps) {
+  const getKycStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'verified': return 'bg-green-100 text-green-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  return (
+    <Card className="bg-white border border-gray-200 hover:shadow-md transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center space-x-4 flex-1">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <User className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900">{borrower.full_name}</h3>
+              <div className="flex items-center space-x-3 mt-1">
+                <span className="text-xs text-gray-600 flex items-center">
+                  <Mail className="h-3 w-3 mr-1" />
+                  {borrower.email}
+                </span>
+                {borrower.phone && (
+                  <span className="text-xs text-gray-600 flex items-center">
+                    <Phone className="h-3 w-3 mr-1" />
+                    {borrower.phone}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => onViewDetails(borrower)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Eye className="h-4 w-4 text-gray-400" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Monthly Income</p>
+            <p className="text-sm font-bold text-gray-900">
+              {borrower.monthly_income ? formatCurrency(borrower.monthly_income) : 'Not provided'}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Credit Score</p>
+            <p className="text-sm font-bold text-gray-900">
+              {borrower.credit_score || 'Not available'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">KYC Status</p>
+            <Badge className={getKycStatusColor(borrower.kyc_status)}>
+              {borrower.kyc_status.toUpperCase()}
+            </Badge>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Added: {formatDate(borrower.created_at)}</p>
+          </div>
+        </div>
+
+        <div className="flex space-x-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onViewDetails(borrower)}
+            className="flex-1 h-9 text-sm"
+          >
+            View Details
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => onCreateLoan(borrower.user_id)}
+            className="flex-1 h-9 text-sm"
+          >
+            Create Loan
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function LenderDashboard() {
   const router = useRouter();
   const { user, isLender, initialized, isAuthenticated } = useAuth();
 
-  // ✅ ALL HOOKS AT TOP LEVEL
-  const [redirectHandled, setRedirectHandled] = React.useState(false);
+  // State management
   const [viewMode, setViewMode] = React.useState<ViewMode>("dashboard");
   const [selectedBorrowerForLoan, setSelectedBorrowerForLoan] = React.useState<string>("");
   const [selectedLoanForPayment, setSelectedLoanForPayment] = React.useState<string>("");
   const [borrowers, setBorrowers] = React.useState<Borrower[]>([]);
   const [loans, setLoans] = React.useState<LoanSummary[]>([]);
-  const [isLoadingBorrowers, setIsLoadingBorrowers] = React.useState(true);
-  const [isLoadingLoans, setIsLoadingLoans] = React.useState(true);
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-
-  const [stats, setStats] = React.useState({
+  
+  // Modal state
+  const [selectedLoanForDetails, setSelectedLoanForDetails] = React.useState<LoanSummary | null>(null);
+  const [selectedBorrowerForDetails, setSelectedBorrowerForDetails] = React.useState<Borrower | null>(null);
+  const [showLoanDetailsModal, setShowLoanDetailsModal] = React.useState(false);
+  const [showBorrowerDetailsModal, setShowBorrowerDetailsModal] = React.useState(false);
+  
+  const [stats, setStats] = React.useState<DashboardStats>({
     totalBorrowers: 0,
     activeLoans: 0,
-    portfolioValue: 0,
-    collectionRate: 95,
-    overdueAmount: 0,
-    paymentsToday: 0,
+    dueEmis: 0,
+    totalLoanAmount: 0,
   });
+  const [loading, setLoading] = React.useState({
+    borrowers: true,
+    loans: true,
+    stats: true,
+  });
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  console.log("💼 MOBILE LENDER DASHBOARD - State:", {
+  console.log("💼 LENDER DASHBOARD - State:", {
     user: user?.email,
     isLender,
     viewMode,
@@ -93,27 +710,24 @@ export default function LenderDashboard() {
     loansCount: loans.length,
   });
 
-  // ✅ AUTH HANDLING
+  // Auth handling
   React.useEffect(() => {
     if (!initialized) return;
-    if (redirectHandled) return;
 
     if (!isAuthenticated) {
       console.log("🚫 LENDER - Not authenticated, redirecting to login");
-      setRedirectHandled(true);
       router.replace("/login");
       return;
     }
 
     if (!isLender) {
       console.log("🚫 LENDER - Not lender, redirecting to dashboard");
-      setRedirectHandled(true);
       router.replace("/dashboard");
       return;
     }
 
     console.log("✅ LENDER - Access granted");
-  }, [initialized, isAuthenticated, isLender, redirectHandled, router]);
+  }, [initialized, isAuthenticated, isLender, router]);
 
   // Load dashboard data
   React.useEffect(() => {
@@ -121,43 +735,36 @@ export default function LenderDashboard() {
     loadDashboardData();
   }, [user, isLender]);
 
-  // ENHANCED: Load borrowers and loan statistics
   const loadDashboardData = async () => {
     if (!user) return;
 
     try {
       console.log("📊 LENDER - Loading dashboard data for lender:", user.id);
-      setIsLoadingBorrowers(true);
-      setIsLoadingLoans(true);
-
       await Promise.all([loadBorrowers(), loadLoans()]);
     } catch (error: unknown) {
       console.error("❌ LENDER - Failed to load dashboard data:", error);
     }
   };
 
-  // Pull to refresh functionality
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
       await loadDashboardData();
-      // Simulate haptic feedback
       if (typeof window !== 'undefined' && 'vibrate' in navigator) {
         navigator.vibrate(50);
       }
     } finally {
-      setTimeout(() => setIsRefreshing(false), 500); // Min 500ms for visual feedback
+      setTimeout(() => setIsRefreshing(false), 500);
     }
   };
 
-  // Load borrowers
   const loadBorrowers = async () => {
     try {
+      setLoading(prev => ({ ...prev, borrowers: true }));
+
       const { data: borrowersData, error: borrowersError } = await supabase
         .from("borrowers")
-        .select(`
-          id, user_id, credit_score, employment_type, monthly_income, created_at
-        `)
+        .select("id, user_id, credit_score, employment_type, monthly_income, created_at")
         .eq("lender_id", user?.id)
         .order("created_at", { ascending: false });
 
@@ -165,6 +772,7 @@ export default function LenderDashboard() {
 
       if (!borrowersData || borrowersData.length === 0) {
         setBorrowers([]);
+        updateStats({ borrowers: 0 });
         return;
       }
 
@@ -206,18 +814,20 @@ export default function LenderDashboard() {
       });
 
       setBorrowers(transformedBorrowers);
+      updateStats({ borrowers: transformedBorrowers.length });
+
     } catch (error: unknown) {
       console.error("❌ LENDER - Failed to load borrowers:", error);
       setBorrowers([]);
+      updateStats({ borrowers: 0 });
     } finally {
-      setIsLoadingBorrowers(false);
+      setLoading(prev => ({ ...prev, borrowers: false }));
     }
   };
 
-  // Load loans with EMI information
   const loadLoans = async () => {
     try {
-      console.log("📊 LENDER - Loading loans with EMI data...");
+      setLoading(prev => ({ ...prev, loans: true, stats: true }));
 
       const { data: loansData, error: loansError } = await supabase
         .from("loans")
@@ -229,7 +839,7 @@ export default function LenderDashboard() {
 
       if (!loansData || loansData.length === 0) {
         setLoans([]);
-        updateStats([], 0, 0, 0, borrowers.length);
+        updateStats({ loans: 0, dueEmis: 0, totalAmount: 0 });
         return;
       }
 
@@ -254,6 +864,7 @@ export default function LenderDashboard() {
         console.warn("⚠️ LENDER - EMIs query warning:", emisError);
       }
 
+      let totalDueEmis = 0;
       const transformedLoans: LoanSummary[] = loansData.map((loan) => {
         const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
         const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
@@ -274,6 +885,15 @@ export default function LenderDashboard() {
           return paidAmount === 0;
         });
 
+        // Calculate due EMIs (unpaid EMIs that are due or overdue)
+        const today = new Date();
+        const dueEMIs = [...partialEMIs, ...pendingEMIs].filter((e) => {
+          const dueDate = new Date(e.due_date);
+          return dueDate <= today;
+        });
+
+        totalDueEmis += dueEMIs.length;
+
         const totalPaid = loanEMIs.reduce((sum, emi) => {
           const paidAmount = emi.paid_amount || 0;
           return sum + Math.min(paidAmount, emi.amount);
@@ -289,13 +909,35 @@ export default function LenderDashboard() {
         );
         const nextDueEMI = unpaidEMIs[0];
 
+        // ✅ CORRECT STATUS CALCULATION based on EMIs and outstanding balance
+        let calculatedStatus = loan.status; // Start with database status
+        
+        // Calculate based on actual payment progress
+        if (outstandingBalance <= 0 && totalEMIs > 0 && paidEMIs === totalEMIs) {
+          calculatedStatus = 'completed'; // Fully paid
+        } else if (totalEMIs > 0 && outstandingBalance > 0) {
+          // Check for overdue EMIs
+          const overdueEMIs = [...partialEMIs, ...pendingEMIs].filter((e) => {
+            const dueDate = new Date(e.due_date);
+            return dueDate < today;
+          });
+          
+          if (overdueEMIs.length > 0) {
+            calculatedStatus = 'overdue';
+          } else if (paidEMIs > 0 || loan.disbursement_date) {
+            calculatedStatus = 'active'; // Has payments or is disbursed
+          }
+        } else if (loan.status === 'approved' && !loan.disbursement_date) {
+          calculatedStatus = 'pending'; // Approved but not disbursed
+        }
+
         return {
           id: loan.id,
           loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
           borrower_name: borrower?.full_name || "Unknown",
           principal_amount: loan.principal_amount,
           total_amount: loan.total_amount || loan.principal_amount,
-          status: loan.status,
+          status: calculatedStatus, // Use calculated status
           disbursement_date: loan.disbursement_date || loan.created_at,
           pending_emis: pendingEMIs.length + partialEMIs.length,
           total_emis: totalEMIs,
@@ -310,49 +952,54 @@ export default function LenderDashboard() {
 
       setLoans(transformedLoans);
 
-      const totalPortfolio = transformedLoans.reduce(
+      const totalAmount = transformedLoans.reduce(
         (sum, loan) => sum + loan.total_amount,
         0
       );
-      const totalOutstanding = transformedLoans.reduce(
-        (sum, loan) => sum + loan.outstanding_balance,
-        0
-      );
-      const totalPaid = totalPortfolio - totalOutstanding;
 
-      updateStats(transformedLoans, totalPortfolio, totalPaid, 0, borrowers.length);
+      updateStats({ 
+        loans: transformedLoans.length, 
+        dueEmis: totalDueEmis, 
+        totalAmount 
+      });
 
     } catch (error: unknown) {
       console.error("❌ LENDER - Failed to load loans:", error);
       setLoans([]);
-      updateStats([], 0, 0, 0, borrowers.length);
+      updateStats({ loans: 0, dueEmis: 0, totalAmount: 0 });
     } finally {
-      setIsLoadingLoans(false);
+      setLoading(prev => ({ ...prev, loans: false, stats: false }));
     }
   };
 
-  // Update dashboard statistics
-  const updateStats = (
-    loans: LoanSummary[],
-    portfolioValue: number,
-    totalPaid: number,
-    overdueAmount: number,
-    borrowersCount: number  // ✅ Add this parameter
-  ) => {
-    const collectionRate =
-      portfolioValue > 0 ? Math.round((totalPaid / portfolioValue) * 100) : 0;
-
-    setStats({
-      totalBorrowers: borrowersCount,
-      activeLoans: loans.length,
-      portfolioValue: portfolioValue,
-      collectionRate: Math.min(collectionRate, 100),
-      overdueAmount: overdueAmount,
-      paymentsToday: 0,
-    });
+  const updateStats = (updates: Partial<{
+    borrowers: number;
+    loans: number;
+    dueEmis: number;
+    totalAmount: number;
+  }>) => {
+    setStats(prev => ({
+      totalBorrowers: updates.borrowers ?? prev.totalBorrowers,
+      activeLoans: updates.loans ?? prev.activeLoans,
+      dueEmis: updates.dueEmis ?? prev.dueEmis,
+      totalLoanAmount: updates.totalAmount ?? prev.totalLoanAmount,
+    }));
   };
 
-  // Handle success callbacks
+  // Navigation handlers
+  const handleNavigateToBorrowers = () => {
+    router.push('/dashboard/lender/borrowers');
+  };
+
+  const handleNavigateToLoans = () => {
+    router.push('/dashboard/lender/loans');
+  };
+
+  const handleNavigateToEMIs = () => {
+    router.push('/dashboard/lender/emis');
+  };
+
+  // Success handlers
   const handleAddBorrowerSuccess = () => {
     setViewMode("dashboard");
     loadDashboardData();
@@ -370,7 +1017,18 @@ export default function LenderDashboard() {
     loadDashboardData();
   };
 
-  // Handle actions
+  // Modal handlers
+  const handleViewLoanDetails = (loan: LoanSummary) => {
+    setSelectedLoanForDetails(loan);
+    setShowLoanDetailsModal(true);
+  };
+
+  const handleViewBorrowerDetails = (borrower: Borrower) => {
+    setSelectedBorrowerForDetails(borrower);
+    setShowBorrowerDetailsModal(true);
+  };
+
+  // Action handlers
   const handleCreateLoanForBorrower = (borrowerId: string) => {
     setSelectedBorrowerForLoan(borrowerId);
     setViewMode("create-loan");
@@ -381,27 +1039,7 @@ export default function LenderDashboard() {
     setViewMode("record-payment");
   };
 
-  // Format currency
-  const formatCurrency = (amount: number | null) => {
-    if (!amount) return "₹0";
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  // ✅ LOADING STATE
+  // Loading state
   if (!initialized) {
     return (
       <DashboardLayout>
@@ -415,14 +1053,14 @@ export default function LenderDashboard() {
     );
   }
 
-  // ✅ NOT AUTHENTICATED STATE
+  // Not authenticated state
   if (!isAuthenticated || !isLender) {
     return (
       <DashboardLayout>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
-            <Briefcase className="h-12 w-12 text-red-600 mx-auto mb-4" />
-            <h2 className="text-lg font-semibold text-gray-900">Access Required</h2>
+            <Users className="h-12 w-12 text-red-600 mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-gray-900">Lender Access Required</h2>
             <p className="text-sm text-gray-600">Redirecting...</p>
           </div>
         </div>
@@ -433,8 +1071,17 @@ export default function LenderDashboard() {
   // Show different views based on mode
   if (viewMode === "add-borrower") {
     return (
-      <DashboardLayout title="Add Borrower" showBackButton>
-        <div className="p-4">
+      <DashboardLayout>
+        <div className="max-w-2xl mx-auto p-6">
+          <div className="mb-6">
+            <Button
+              variant="outline"
+              onClick={() => setViewMode("dashboard")}
+              size="sm"
+            >
+              ← Back to Dashboard
+            </Button>
+          </div>
           <AddBorrowerForm
             onSuccess={handleAddBorrowerSuccess}
             onCancel={() => setViewMode("dashboard")}
@@ -446,8 +1093,17 @@ export default function LenderDashboard() {
 
   if (viewMode === "create-loan") {
     return (
-      <DashboardLayout title="Create Loan" showBackButton>
-        <div className="p-4">
+      <DashboardLayout>
+        <div className="max-w-2xl mx-auto p-6">
+          <div className="mb-6">
+            <Button
+              variant="outline"
+              onClick={() => setViewMode("dashboard")}
+              size="sm"
+            >
+              ← Back to Dashboard
+            </Button>
+          </div>
           <CreateLoanForm
             borrowerId={selectedBorrowerForLoan}
             onSuccess={handleCreateLoanSuccess}
@@ -463,8 +1119,17 @@ export default function LenderDashboard() {
 
   if (viewMode === "record-payment") {
     return (
-      <DashboardLayout title="Record Payment" showBackButton>
-        <div className="p-4">
+      <DashboardLayout>
+        <div className="max-w-2xl mx-auto p-6">
+          <div className="mb-6">
+            <Button
+              variant="outline"
+              onClick={() => setViewMode("dashboard")}
+              size="sm"
+            >
+              ← Back to Dashboard
+            </Button>
+          </div>
           <RecordPaymentForm
             loanId={selectedLoanForPayment}
             onSuccess={handleRecordPaymentSuccess}
@@ -478,232 +1143,233 @@ export default function LenderDashboard() {
     );
   }
 
-  // ✅ MAIN MOBILE-FIRST LENDER DASHBOARD
+  // Main dashboard
   return (
     <DashboardLayout>
       <div className="bg-gray-50 min-h-screen">
-        {/* Pull to Refresh Header */}
-        <div className="bg-white px-4 py-3 border-b border-gray-200">
+        {/* Header */}
+        <div className="bg-white px-6 py-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Portfolio Overview</h2>
-              <p className="text-sm text-gray-600">
-                {loans.length} active loans • {borrowers.length} borrowers
+              <h1 className="text-2xl font-bold text-gray-900">Lender Dashboard</h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage your lending portfolio and borrower relationships
               </p>
             </div>
-            <button
+            <Button
+              variant="outline"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+              size="sm"
             >
-              <RefreshCw className={`h-5 w-5 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
           </div>
         </div>
 
-        <div className="p-4 space-y-6">
-          {/* Professional Stats Grid - Minimal Design */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
             <StatsCard
               title="Total Borrowers"
               value={stats.totalBorrowers}
               icon={Users}
-              loading={isLoadingBorrowers}
-              className="col-span-1"
-              subtitle="Active users"
+              loading={loading.borrowers}
+              onClick={handleNavigateToBorrowers}
+              subtitle="Manage contacts"
             />
             <StatsCard
               title="Active Loans"
               value={stats.activeLoans}
               icon={CreditCard}
-              loading={isLoadingLoans}
-              className="col-span-1"
-              subtitle="In progress"
+              loading={loading.loans}
+              onClick={handleNavigateToLoans}
+              subtitle="Portfolio overview"
             />
             <StatsCard
-              title="Portfolio Value"
-              value={formatCurrency(stats.portfolioValue)}
-              icon={IndianRupee}
-              loading={isLoadingLoans}
-              className="col-span-2 lg:col-span-1"
-              subtitle="Total disbursed"
+              title="Due EMIs"
+              value={stats.dueEmis}
+              icon={Calendar}
+              loading={loading.stats}
+              onClick={handleNavigateToEMIs}
+              subtitle="Require attention"
             />
             <StatsCard
-              title="Collection Rate"
-              value={`${stats.collectionRate}%`}
-              change={stats.collectionRate >= 90 ? "Excellent" : stats.collectionRate >= 75 ? "Good" : "Needs attention"}
-              changeType={stats.collectionRate >= 90 ? "positive" : stats.collectionRate >= 75 ? "neutral" : "negative"}
-              icon={TrendingUp}
-              loading={isLoadingLoans}
-              className="col-span-2 lg:col-span-1"
-              subtitle="Performance"
+              title="Total Loan Amount"
+              value={formatCurrency(stats.totalLoanAmount)}
+              icon={DollarSign}
+              loading={loading.stats}
+              subtitle="Portfolio value"
             />
           </div>
 
-          {/* Mobile-Optimized Quick Actions */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-            </div>
-            <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                onClick={() => setViewMode("add-borrower")}
-                className="flex items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group"
-              >
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
-                    <Users className="h-6 w-6 text-white" />
+          {/* Quick Actions */}
+          <Card className="bg-white border border-gray-200">
+            <CardContent className="p-4 sm:p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Quick Actions</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <button
+                  onClick={() => setViewMode("add-borrower")}
+                  className="flex items-center justify-center p-4 sm:p-6 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group"
+                >
+                  <div className="text-center">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3 group-hover:scale-105 transition-transform">
+                      <Users className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-blue-900">Add Borrower</span>
                   </div>
-                  <span className="text-sm font-medium text-blue-900">Add Borrower</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setViewMode("create-loan")}
-                disabled={borrowers.length === 0}
-                className="flex items-center justify-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
-                    <CreditCard className="h-6 w-6 text-white" />
-                  </div>
-                  <span className="text-sm font-medium text-green-900">Create Loan</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setViewMode("record-payment")}
-                disabled={loans.length === 0}
-                className="flex items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
-                    <Receipt className="h-6 w-6 text-white" />
-                  </div>
-                  <span className="text-sm font-medium text-purple-900">Record Payment</span>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Enterprise-Grade Recent Loans */}
-          <SectionContainer
-            title="Recent Loans"
-            subtitle="Active loan portfolio"
-            count={loans.length}
-            action={
-              loans.length > 0 && (
-                <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  View All
                 </button>
-              )
-            }
-          >
-            {isLoadingLoans ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-sm text-gray-600">Loading loans...</p>
-              </div>
-            ) : loans.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <CreditCard className="h-8 w-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Loans Yet</h3>
-                <p className="text-gray-600 mb-6 text-sm max-w-sm mx-auto">
-                  Create your first loan to start tracking payments and managing your portfolio.
-                </p>
+
                 <button
                   onClick={() => setViewMode("create-loan")}
                   disabled={borrowers.length === 0}
-                  className="inline-flex items-center bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                  className="flex items-center justify-center p-4 sm:p-6 bg-green-50 hover:bg-green-100 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create First Loan
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {loans.slice(0, 3).map((loan) => (
-                  <LoanCard
-                    key={loan.id}
-                    loan={loan}
-                    onRecordPayment={handleRecordPaymentForLoan}
-                    onViewDetails={(loanId) => console.log('View loan details:', loanId)}
-                    formatCurrency={formatCurrency}
-                    formatDate={formatDate}
-                  />
-                ))}
-                
-                {loans.length > 3 && (
-                  <div className="text-center pt-4 border-t border-gray-200">
-                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                      View all {loans.length} loans →
-                    </button>
+                  <div className="text-center">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3 group-hover:scale-105 transition-transform">
+                      <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-green-900">Create Loan</span>
                   </div>
-                )}
-              </div>
-            )}
-          </SectionContainer>
+                </button>
 
-          {/* Enterprise-Grade Recent Borrowers */}
-          <SectionContainer
-            title="Recent Borrowers"
-            subtitle="Your customer base"
-            count={borrowers.length}
-            action={
-              borrowers.length > 0 && (
-                <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  View All
-                </button>
-              )
-            }
-          >
-            {isLoadingBorrowers ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-sm text-gray-600">Loading borrowers...</p>
-              </div>
-            ) : borrowers.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-8 w-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Borrowers Yet</h3>
-                <p className="text-gray-600 mb-6 text-sm max-w-sm mx-auto">
-                  Add your first borrower to start building your lending portfolio.
-                </p>
                 <button
-                  onClick={() => setViewMode("add-borrower")}
-                  className="inline-flex items-center bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  onClick={() => setViewMode("record-payment")}
+                  disabled={loans.length === 0}
+                  className="flex items-center justify-center p-4 sm:p-6 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add First Borrower
+                  <div className="text-center">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3 group-hover:scale-105 transition-transform">
+                      <Receipt className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-purple-900">Record Payment</span>
+                  </div>
                 </button>
               </div>
-            ) : (
-              <div className="space-y-6">
-                {borrowers.slice(0, 3).map((borrower) => (
-                  <BorrowerCard
-                    key={borrower.id}
-                    borrower={borrower}
-                    onCreateLoan={handleCreateLoanForBorrower}
-                    onViewDetails={(borrowerId) => console.log('View borrower details:', borrowerId)}
-                    formatCurrency={formatCurrency}
-                  />
-                ))}
-                
-                {borrowers.length > 3 && (
-                  <div className="text-center pt-4 border-t border-gray-200">
-                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                      View all {borrowers.length} borrowers →
-                    </button>
-                  </div>
+            </CardContent>
+          </Card>
+
+          {/* Recent Loans */}
+          <Card className="bg-white border border-gray-200">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Recent Loans</h2>
+                  <p className="text-sm text-gray-600">Your latest lending activity</p>
+                </div>
+                {loans.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleNavigateToLoans}
+                  >
+                    View All
+                  </Button>
                 )}
               </div>
-            )}
-          </SectionContainer>
+
+              {loading.loans ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-sm text-gray-600">Loading loans...</p>
+                </div>
+              ) : loans.length === 0 ? (
+                <div className="text-center py-8 sm:py-12">
+                  <CreditCard className="h-12 w-12 sm:h-16 sm:w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Loans Yet</h3>
+                  <p className="text-gray-600 mb-6 max-w-sm mx-auto text-sm sm:text-base">
+                    Create your first loan to start building your lending portfolio.
+                  </p>
+                  <Button
+                    onClick={() => setViewMode("create-loan")}
+                    disabled={borrowers.length === 0}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create First Loan
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                  {loans.slice(0, 4).map((loan) => (
+                    <LoanCard
+                      key={loan.id}
+                      loan={loan}
+                      onRecordPayment={handleRecordPaymentForLoan}
+                      onViewDetails={handleViewLoanDetails}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Borrowers */}
+          <Card className="bg-white border border-gray-200">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Recent Borrowers</h2>
+                  <p className="text-sm text-gray-600">Your customer base</p>
+                </div>
+                {borrowers.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleNavigateToBorrowers}
+                  >
+                    View All
+                  </Button>
+                )}
+              </div>
+
+              {loading.borrowers ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-sm text-gray-600">Loading borrowers...</p>
+                </div>
+              ) : borrowers.length === 0 ? (
+                <div className="text-center py-8 sm:py-12">
+                  <Users className="h-12 w-12 sm:h-16 sm:w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Borrowers Yet</h3>
+                  <p className="text-gray-600 mb-6 max-w-sm mx-auto text-sm sm:text-base">
+                    Add your first borrower to start building your lending network.
+                  </p>
+                  <Button onClick={() => setViewMode("add-borrower")}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add First Borrower
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                  {borrowers.slice(0, 4).map((borrower) => (
+                    <BorrowerCard
+                      key={borrower.id}
+                      borrower={borrower}
+                      onCreateLoan={handleCreateLoanForBorrower}
+                      onViewDetails={handleViewBorrowerDetails}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Modals */}
+        <LoanDetailsModal
+          loan={selectedLoanForDetails}
+          isOpen={showLoanDetailsModal}
+          onClose={() => setShowLoanDetailsModal(false)}
+          onRecordPayment={handleRecordPaymentForLoan}
+        />
+
+        <BorrowerDetailsModal
+          borrower={selectedBorrowerForDetails}
+          isOpen={showBorrowerDetailsModal}
+          onClose={() => setShowBorrowerDetailsModal(false)}
+          onCreateLoan={handleCreateLoanForBorrower}
+        />
       </div>
     </DashboardLayout>
   );

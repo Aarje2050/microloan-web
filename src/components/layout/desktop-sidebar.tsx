@@ -17,7 +17,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
-  Search
+  Search,
+  BarChart3,
+  IndianRupee
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -66,42 +68,34 @@ export default function DesktopSidebar({
       icon: Home,
       label: 'Dashboard',
       href: '/dashboard/lender',
-      color: 'blue'
+      color: 'primary'
     },
     {
       icon: CreditCard,
       label: 'Loans Management',
       href: '/dashboard/lender/loans',
       badge: 0, // TODO: Get from actual data
-      color: 'green',
-      subItems: [
-        { icon: CreditCard, label: 'Active Loans', href: '/dashboard/lender/loans', color: 'green' },
-        { icon: CreditCard, label: 'Create New', href: '/dashboard/lender/loans/create', color: 'green' },
-        { icon: CreditCard, label: 'Payment History', href: '/dashboard/lender/loans/payments', color: 'green' }
-      ]
+      color: 'success',
+    },
+
+    {
+      icon: Zap,
+      label: 'EMIs',
+      href: '/dashboard/lender/emis',
+      color: 'warning'
     },
     {
       icon: Users,
       label: 'Borrowers',
       href: '/dashboard/lender/borrowers',
-      color: 'purple',
-      subItems: [
-        { icon: Users, label: 'All Borrowers', href: '/dashboard/lender/borrowers', color: 'purple' },
-        { icon: Users, label: 'Add New', href: '/dashboard/lender/borrowers/add', color: 'purple' },
-        { icon: Users, label: 'KYC Pending', href: '/dashboard/lender/borrowers/kyc', color: 'purple' }
-      ]
+      color: 'primary',
     },
-    {
-      icon: Zap,
-      label: 'Quick Actions',
-      href: '/dashboard/lender/actions',
-      color: 'orange'
-    },
+    
     {
       icon: TrendingUp,
       label: 'Analytics',
       href: '/dashboard/lender/analytics',
-      color: 'indigo'
+      color: 'primary'
     }
   ]
 
@@ -111,72 +105,73 @@ export default function DesktopSidebar({
       icon: Home,
       label: 'Dashboard',
       href: '/dashboard/borrower',
-      color: 'blue'
+      color: 'primary'
     },
     {
       icon: CreditCard,
       label: 'My Loans',
       href: '/dashboard/borrower/loans',
       badge: 0, // TODO: Get from actual data
-      color: 'green'
+      color: 'success'
     },
     {
       icon: TrendingUp,
       label: 'Payment History',
       href: '/dashboard/borrower/payments',
-      color: 'purple'
+      color: 'primary'
     },
     {
       icon: Users,
       label: 'My Lenders',
       href: '/dashboard/borrower/lenders',
-      color: 'indigo'
+      color: 'primary'
     },
     {
       icon: Bell,
       label: 'Notifications',
       href: '/dashboard/borrower/notifications',
       badge: 0, // TODO: Get from actual data
-      color: 'orange'
+      color: 'warning'
     }
   ]
 
   // Admin sidebar items
   const adminSidebarItems: SidebarItem[] = [
     {
-      icon: Home,
+      icon: BarChart3,
       label: 'Dashboard',
       href: '/dashboard/admin',
-      color: 'blue'
+      color: 'primary'
     },
     {
       icon: Users,
       label: 'User Management',
       href: '/dashboard/admin/users',
-      color: 'purple',
-      subItems: [
-        { icon: Users, label: 'All Users', href: '/dashboard/admin/users', color: 'purple' },
-        { icon: Users, label: 'Lenders', href: '/dashboard/admin/users/lenders', color: 'purple' },
-        { icon: Users, label: 'Borrowers', href: '/dashboard/admin/users/borrowers', color: 'purple' }
-      ]
+      color: 'primary',
     },
     {
       icon: CreditCard,
       label: 'Loan Management',
       href: '/dashboard/admin/loans',
-      color: 'green'
+      color: 'success'
+    },
+    {
+      icon: IndianRupee,
+      label: 'EMI Management',
+      href: '/dashboard/admin/emis',
+      color: 'success'
     },
     {
       icon: TrendingUp,
       label: 'Analytics',
       href: '/dashboard/admin/analytics',
-      color: 'orange'
+      color: 'warning'
     },
     {
       icon: Settings,
       label: 'System Settings',
       href: '/dashboard/admin/settings',
-      color: 'gray'
+      color: 'muted'
     }
   ]
 
@@ -246,17 +241,13 @@ export default function DesktopSidebar({
     )
   }
 
-  // Get color classes for sidebar items
+  // Get color classes for sidebar items using enterprise design system
   const getColorClasses = (color: string, isActive: boolean) => {
-    const colors = {
-      blue: isActive ? 'text-blue-600 bg-blue-50 border-blue-200' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600',
-      green: isActive ? 'text-green-600 bg-green-50 border-green-200' : 'text-gray-700 hover:bg-green-50 hover:text-green-600',
-      purple: isActive ? 'text-purple-600 bg-purple-50 border-purple-200' : 'text-gray-700 hover:bg-purple-50 hover:text-purple-600',
-      orange: isActive ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-gray-700 hover:bg-orange-50 hover:text-orange-600',
-      indigo: isActive ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-600',
-      gray: isActive ? 'text-gray-700 bg-gray-100 border-gray-200' : 'text-gray-700 hover:bg-gray-50'
+    if (isActive) {
+      return 'text-primary bg-primary/10 border-primary/20'
     }
-    return colors[color as keyof typeof colors] || colors.gray
+    
+    return 'text-muted-foreground hover:bg-accent hover:text-foreground border-transparent'
   }
 
   // Don't render if not on a dashboard page
@@ -266,45 +257,47 @@ export default function DesktopSidebar({
 
   return (
     <aside className={cn(
-      "hidden lg:flex flex-col bg-white border-r border-gray-200 transition-all duration-300 z-30",
+      "hidden lg:flex flex-col bg-card border-r border-border transition-all duration-300 z-30 shadow-sm",
       collapsed ? "w-16" : "w-64",
       className
     )}>
       {/* Sidebar Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+      <div className="flex items-center justify-between p-4 border-b border-border">
         {!collapsed && (
           <div className="flex items-center">
-            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
-              <Briefcase className="h-4 w-4 text-white" />
+            <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center mr-3 hover-lift">
+              {currentUserType === 'lender' && <Briefcase className="h-4 w-4 text-primary-foreground" />}
+              {currentUserType === 'borrower' && <User className="h-4 w-4 text-primary-foreground" />}
+              {currentUserType === 'admin' && <Settings className="h-4 w-4 text-primary-foreground" />}
             </div>
             <div>
-              <h2 className="text-sm font-bold text-gray-900">
+              <h2 className="text-sm font-bold text-foreground">
                 {currentUserType.charAt(0).toUpperCase() + currentUserType.slice(1)}
               </h2>
-              <p className="text-xs text-gray-500">Dashboard</p>
+              <p className="text-xs text-muted-foreground">Dashboard</p>
             </div>
           </div>
         )}
         
         <button
           onClick={handleCollapseToggle}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-lg hover:bg-accent transition-colors interactive-scale"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (
-            <ChevronRight className="h-4 w-4 text-gray-600" />
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           ) : (
-            <ChevronLeft className="h-4 w-4 text-gray-600" />
+            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
           )}
         </button>
       </div>
 
       {/* Navigation Items */}
-      <nav className="flex-1 px-4 py-6 space-y-1">
+      <nav className="flex-1 px-4 py-6 space-y-1 pt-24"> {/* Add top padding for fixed header */}
         {sidebarItems.map((item) => {
           const Icon = item.icon
           const active = isActive(item.href)
-          const colorClasses = getColorClasses(item.color || 'gray', active)
+          const colorClasses = getColorClasses(item.color || 'muted', active)
           const hasSubItems = item.subItems && item.subItems.length > 0
           const isExpanded = expandedItems.includes(item.href)
           
@@ -320,9 +313,8 @@ export default function DesktopSidebar({
                   }
                 }}
                 className={cn(
-                  "w-full flex items-center px-3 py-2 text-left rounded-lg transition-all duration-200 border border-transparent",
-                  colorClasses,
-                  active && "border"
+                  "w-full flex items-center px-3 py-3 text-left rounded-lg transition-all duration-200 border font-medium hover-lift interactive-scale",
+                  colorClasses
                 )}
                 title={collapsed ? item.label : undefined}
               >
@@ -330,13 +322,13 @@ export default function DesktopSidebar({
                 
                 {!collapsed && (
                   <>
-                    <span className="ml-3 font-medium text-sm truncate flex-1">
+                    <span className="ml-3 text-sm truncate flex-1">
                       {item.label}
                     </span>
                     
                     {/* Badge */}
                     {item.badge !== undefined && item.badge > 0 && (
-                      <span className="ml-2 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-2 font-medium">
+                      <span className="ml-2 bg-destructive text-destructive-foreground text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-2 font-medium shadow-sm">
                         {item.badge > 99 ? '99+' : item.badge}
                       </span>
                     )}
@@ -344,7 +336,7 @@ export default function DesktopSidebar({
                     {/* Expand Arrow */}
                     {hasSubItems && (
                       <ChevronRight className={cn(
-                        "h-4 w-4 ml-2 transition-transform duration-200",
+                        "h-4 w-4 ml-2 transition-transform duration-200 text-muted-foreground",
                         isExpanded && "transform rotate-90"
                       )} />
                     )}
@@ -354,18 +346,18 @@ export default function DesktopSidebar({
               
               {/* Sub Items */}
               {hasSubItems && !collapsed && isExpanded && (
-                <div className="ml-8 mt-1 space-y-1">
+                <div className="ml-8 mt-1 space-y-1 animate-enter">
                   {item.subItems?.map((subItem) => {
                     const SubIcon = subItem.icon
                     const subActive = isActive(subItem.href)
-                    const subColorClasses = getColorClasses(subItem.color || 'gray', subActive)
+                    const subColorClasses = getColorClasses(subItem.color || 'muted', subActive)
                     
                     return (
                       <button
                         key={subItem.href}
                         onClick={() => handleNavigation(subItem.href)}
                         className={cn(
-                          "w-full flex items-center px-3 py-2 text-left rounded-lg transition-colors text-sm",
+                          "w-full flex items-center px-3 py-2 text-left rounded-lg transition-all duration-200 text-sm border hover-lift interactive-scale",
                           subColorClasses
                         )}
                       >
@@ -382,14 +374,14 @@ export default function DesktopSidebar({
       </nav>
 
       {/* User Section */}
-      <div className="p-4 border-t border-gray-200 space-y-2">
+      <div className="p-4 border-t border-border space-y-2">
         {/* User Info */}
         {!collapsed && (
           <div className="px-3 py-2">
-            <p className="text-sm font-medium text-gray-900 truncate">
+            <p className="text-sm font-medium text-foreground truncate">
               {user?.full_name || user?.email}
             </p>
-            <p className="text-xs text-gray-500 truncate">
+            <p className="text-xs text-muted-foreground truncate">
               {user?.email}
             </p>
           </div>
@@ -399,7 +391,7 @@ export default function DesktopSidebar({
         {isBoth && (
           <button
             onClick={handleRoleSwitch}
-            className="w-full flex items-center px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            className="w-full flex items-center px-3 py-2 text-sm text-primary hover:bg-primary/10 rounded-lg transition-colors interactive-scale"
             title={collapsed ? 'Switch Role' : undefined}
           >
             <User className="h-4 w-4 shrink-0" />
@@ -415,7 +407,7 @@ export default function DesktopSidebar({
         <button
           onClick={handleSignOut}
           disabled={isSigningOut}
-          className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+          className="w-full flex items-center px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50 interactive-scale"
           title={collapsed ? 'Sign Out' : undefined}
         >
           <LogOut className="h-4 w-4 shrink-0" />
