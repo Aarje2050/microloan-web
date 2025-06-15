@@ -199,17 +199,7 @@ export default function LoginPage() {
           </div>
         </div>
         
-        {/* Test Credentials */}
-        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-yellow-800 mb-2">Test Credentials:</h3>
-          <div className="text-xs text-yellow-700">
-            <p><strong>Super Admin:</strong> aarje2050@gmail.com / rajesh@321</p>
-            <p><strong>Lender:</strong> rajesh@immortalseo.com / Rajesh@321</p>
-
-            <p><strong>Borrower:</strong> rrishika3010@gmail.com / Rajesh@321</p>
-
-          </div>
-        </div>
+      
       </div>
     </div>
   )
