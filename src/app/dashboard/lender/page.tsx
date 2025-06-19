@@ -952,15 +952,15 @@ export default function LenderDashboard() {
 
       setLoans(transformedLoans);
 
-      const totalAmount = transformedLoans.reduce(
-        (sum, loan) => sum + loan.total_amount,
+      const totalDisbursedAmount = transformedLoans.reduce(
+        (sum, loan) => sum + loan.principal_amount,
         0
       );
 
       updateStats({ 
         loans: transformedLoans.length, 
         dueEmis: totalDueEmis, 
-        totalAmount 
+        totalAmount: totalDisbursedAmount // Use the updated value
       });
 
     } catch (error: unknown) {
