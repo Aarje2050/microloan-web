@@ -140,17 +140,11 @@ export function LoanCard({
         </div>
 
         {/* Financial Summary */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 gap-4 mb-4">
           <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Outstanding</p>
-            <p className="text-xl font-bold text-red-600">
-              {formatCurrency(loan.outstanding_balance)}
-            </p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Amount</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Loan Amount (Disbursed)</p>
             <p className="text-xl font-bold text-gray-900">
-              {formatCurrency(loan.total_amount)}
+              {formatCurrency(loan.principal_amount)}
             </p>
           </div>
         </div>

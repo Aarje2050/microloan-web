@@ -512,14 +512,11 @@ function LoanCard({ loan, onRecordPayment, onViewDetails }: LoanCardProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
+      {/* Replace Principal and Outstanding with Loan Amount (Disbursed) */}
+      <div className="grid grid-cols-1 gap-4 mb-4">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Principal</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Loan Amount (Disbursed)</p>
             <p className="text-lg font-bold text-gray-900">{formatCurrency(loan.principal_amount)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Outstanding</p>
-            <p className="text-lg font-bold text-red-600">{formatCurrency(loan.outstanding_balance)}</p>
           </div>
         </div>
 

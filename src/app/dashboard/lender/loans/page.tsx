@@ -360,15 +360,15 @@ export default function LenderLoansPage() {
               )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {filteredLoans.map((loan) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {loans.map((loan) => (
                 <LoanCard
                   key={loan.id}
                   loan={loan}
-                  onRecordPayment={handleRecordPayment}
-                  onViewDetails={handleViewDetails}
-                  formatCurrency={formatCurrency}
-                  formatDate={formatDate}
+                  onRecordPayment={(loanId) => handleRecordPayment(loanId)}
+                  onViewDetails={(loanId) => handleViewDetails(loanId)}
+                  formatCurrency={(amount) => formatCurrency(amount)}
+                  formatDate={(dateString) => formatDate(dateString)}
                 />
               ))}
               
