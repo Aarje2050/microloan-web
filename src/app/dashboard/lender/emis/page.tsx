@@ -29,7 +29,8 @@ import {
   Users,
   CreditCard,
   Target,
-  Filter
+  Filter,
+  ChevronDown
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -591,6 +592,8 @@ export default function LenderEMIManagement() {
   const [selectedEMI, setSelectedEMI] = React.useState<LenderEMI | null>(null)
   const [showEMIDetails, setShowEMIDetails] = React.useState(false)
   const [actionLoading, setActionLoading] = React.useState<string | null>(null)
+  const [isMonthlyOverviewExpanded, setIsMonthlyOverviewExpanded] = React.useState(false)
+
   
   // Filters and search
   const [searchQuery, setSearchQuery] = React.useState('')
@@ -1192,70 +1195,94 @@ const summaryStats = React.useMemo(() => {
           </div>
         </div>
 
-        {/* Monthly EMI Distribution Overview */}
+{/* Collapsible Monthly EMI Distribution Overview */}
 <div className="bg-white border border-gray-200 rounded-xl mb-6 shadow-sm">
-  <div className="px-6 py-4 border-b border-gray-200">
-    <h3 className="text-lg font-semibold text-gray-900">EMI Distribution by Month</h3>
-    <p className="text-sm text-gray-600">Cash flow planning and monthly collections overview</p>
-  </div>
-  <div className="p-6">
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-      {getEMIsByMonth.slice(0, 12).map((month) => (
-        <button
-          key={month.key}
-          onClick={() => setSelectedMonth(selectedMonth === month.key ? 'all' : month.key)}
-          className={cn(
-            "p-3 rounded-lg border text-left transition-all duration-200 hover:shadow-md",
-            selectedMonth === month.key
-              ? "border-blue-500 bg-blue-50 shadow-md"
-              : "border-gray-200 bg-white hover:border-gray-300"
-          )}
-        >
-          <div className="space-y-1">
-            <p className={cn(
-              "text-sm font-semibold",
-              selectedMonth === month.key ? "text-blue-900" : "text-gray-900"
-            )}>
-              {month.label}
-            </p>
-            <div className="space-y-0.5">
+  {/* Clickable Header */}
+  <button
+    onClick={() => setIsMonthlyOverviewExpanded(!isMonthlyOverviewExpanded)}
+    className="w-full px-6 py-4 border-b border-gray-200 flex items-center justify-between hover:bg-gray-50 transition-colors"
+  >
+    <div className="text-left">
+      <h3 className="text-lg font-semibold text-gray-900">EMI Distribution by Month</h3>
+      <p className="text-sm text-gray-600">Cash flow planning and monthly collections overview</p>
+    </div>
+    <div className="flex items-center space-x-2">
+      <span className="text-sm text-gray-500">
+        {isMonthlyOverviewExpanded ? 'Hide' : 'Show'} ({getEMIsByMonth.length} months)
+      </span>
+      <ChevronDown 
+        className={cn(
+          "h-5 w-5 text-gray-400 transition-transform duration-200",
+          isMonthlyOverviewExpanded ? "rotate-180" : "rotate-0"
+        )} 
+      />
+    </div>
+  </button>
+
+  {/* Collapsible Content */}
+  <div className={cn(
+    "overflow-hidden transition-all duration-300 ease-in-out",
+    isMonthlyOverviewExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+  )}>
+    <div className="p-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+        {getEMIsByMonth.slice(0, 12).map((month) => (
+          <button
+            key={month.key}
+            onClick={() => setSelectedMonth(selectedMonth === month.key ? 'all' : month.key)}
+            className={cn(
+              "p-3 rounded-lg border text-left transition-all duration-200 hover:shadow-md",
+              selectedMonth === month.key
+                ? "border-blue-500 bg-blue-50 shadow-md"
+                : "border-gray-200 bg-white hover:border-gray-300"
+            )}
+          >
+            <div className="space-y-1">
               <p className={cn(
-                "text-lg font-bold",
-                selectedMonth === month.key ? "text-blue-700" : "text-gray-700"
+                "text-sm font-semibold",
+                selectedMonth === month.key ? "text-blue-900" : "text-gray-900"
               )}>
-                {month.count} EMIs
+                {month.label}
               </p>
-              <p className="text-xs text-gray-600">
-                {formatCurrency(month.totalAmount)}
-              </p>
-              <div className="flex space-x-2 text-xs">
-                {month.paidCount > 0 && (
-                  <span className="text-green-600">✓{month.paidCount}</span>
-                )}
-                {month.overdueCount > 0 && (
-                  <span className="text-red-600">⚠{month.overdueCount}</span>
-                )}
-                {month.dueCount > 0 && (
-                  <span className="text-blue-600">📅{month.dueCount}</span>
-                )}
+              <div className="space-y-0.5">
+                <p className={cn(
+                  "text-lg font-bold",
+                  selectedMonth === month.key ? "text-blue-700" : "text-gray-700"
+                )}>
+                  {month.count} EMIs
+                </p>
+                <p className="text-xs text-gray-600">
+                  {formatCurrency(month.totalAmount)}
+                </p>
+                <div className="flex space-x-2 text-xs">
+                  {month.paidCount > 0 && (
+                    <span className="text-green-600">✓{month.paidCount}</span>
+                  )}
+                  {month.overdueCount > 0 && (
+                    <span className="text-red-600">⚠{month.overdueCount}</span>
+                  )}
+                  {month.dueCount > 0 && (
+                    <span className="text-blue-600">📅{month.dueCount}</span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </button>
-      ))}
-    </div>
-    
-    {/* Show All Months Button */}
-    {getEMIsByMonth.length > 12 && (
-      <div className="mt-4 text-center">
-        <button
-          onClick={() => console.log('Show all months modal')}
-          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-        >
-          View All {getEMIsByMonth.length} Months →
-        </button>
+          </button>
+        ))}
       </div>
-    )}
+      
+      {/* Show All Months Button */}
+      {getEMIsByMonth.length > 12 && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => console.log('Show all months modal')}
+            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+          >
+            View All {getEMIsByMonth.length} Months →
+          </button>
+        </div>
+      )}
+    </div>
   </div>
 </div>
 
