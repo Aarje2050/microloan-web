@@ -1,14 +1,11 @@
-// app/dashboard/lender/page.tsx - PROFESSIONAL LENDER DASHBOARD
+// app/dashboard/lender/page.tsx - PROFESSIONAL LENDER DASHBOARD WITH MONTHLY INTEREST
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import DashboardLayout from "@/components/layout/dashboard-layout";
-import { useSearchParams } from 'next/navigation';
-
-
 import {
   Users,
   CreditCard,
@@ -24,7 +21,10 @@ import {
   User,
   TrendingUp,
   TrendingDown,
-  X
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,9 +32,9 @@ import { Badge } from "@/components/ui/badge";
 import AddBorrowerForm from "@/components/forms/add-borrower-form";
 import CreateLoanForm from "@/components/forms/loan/create-loan-form";
 import RecordPaymentForm from "@/components/forms/loan/record-payment-form";
+import { UnifiedLoanCard } from "@/components/ui/unified-loan-card";
+import { LoanSummary, calculateLoanStatus } from "@/lib/loan-utils";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
-import { LoanSummary, calculateLoanStatus } from '@/lib/loan-utils';
-import { UnifiedLoanCard } from '@/components/ui/unified-loan-card';
 
 interface Borrower {
   id: string;
@@ -49,13 +49,11 @@ interface Borrower {
   created_at: string;
 }
 
-
-
 interface DashboardStats {
   totalBorrowers: number;
   activeLoans: number;
   dueEmis: number;
-  totalLoanAmount: number;
+  currentMonthEarnings: number; // EMIs due in current month
 }
 
 type ViewMode = "dashboard" | "add-borrower" | "create-loan" | "record-payment";
@@ -139,7 +137,6 @@ function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment }: LoanDetail
             <div>
               <h3 className="text-xl font-semibold text-gray-900">{loan.loan_number}</h3>
               <p className="text-sm text-gray-500 mt-1">Loan Details & Progress</p>
-
             </div>
             <button
               onClick={onClose}
@@ -212,6 +209,27 @@ function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment }: LoanDetail
               </div>
             </div>
           </div>
+
+          {/* Purpose & Notes */}
+          {(loan.purpose || loan.notes) && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-4">Loan Information</h4>
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                {loan.purpose && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Purpose</p>
+                    <p className="text-sm text-gray-700">{loan.purpose}</p>
+                  </div>
+                )}
+                {loan.notes && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Notes</p>
+                    <p className="text-sm text-gray-700">{loan.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* EMI Progress */}
           <div>
@@ -463,6 +481,7 @@ function BorrowerDetailsModal({ borrower, isOpen, onClose, onCreateLoan }: Borro
     </div>
   );
 }
+
 interface LoanCardProps {
   loan: LoanSummary;
   onRecordPayment: (loanId: string) => void;
@@ -580,11 +599,10 @@ function BorrowerCard({ borrower, onCreateLoan, onViewDetails }: BorrowerCardPro
 
 export default function LenderDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isLender, initialized, isAuthenticated } = useAuth();
 
   // State management
-  const searchParams = useSearchParams();
-
   const [viewMode, setViewMode] = React.useState<ViewMode>("dashboard");
   const [selectedBorrowerForLoan, setSelectedBorrowerForLoan] = React.useState<string>("");
   const [selectedLoanForPayment, setSelectedLoanForPayment] = React.useState<string>("");
@@ -601,7 +619,7 @@ export default function LenderDashboard() {
     totalBorrowers: 0,
     activeLoans: 0,
     dueEmis: 0,
-    totalLoanAmount: 0,
+    currentMonthEarnings: 0, // EMIs due in current month
   });
   const [loading, setLoading] = React.useState({
     borrowers: true,
@@ -638,46 +656,127 @@ export default function LenderDashboard() {
   }, [initialized, isAuthenticated, isLender, router]);
 
   // Handle URL parameters for deep linking to forms
-React.useEffect(() => {
-  if (!initialized || !isAuthenticated || !isLender) return;
+  React.useEffect(() => {
+    if (!initialized || !isAuthenticated || !isLender) return;
 
-  const mode = searchParams.get('mode');
-  const loanId = searchParams.get('loan');
-  const borrowerId = searchParams.get('borrower');
+    const mode = searchParams.get('mode');
+    const loanId = searchParams.get('loan');
+    const borrowerId = searchParams.get('borrower');
 
-  console.log("📋 DASHBOARD - URL params:", { mode, loanId, borrowerId });
+    console.log("📋 DASHBOARD - URL params:", { mode, loanId, borrowerId });
 
-  if (mode && mode !== viewMode) {
-    switch (mode) {
-      case 'record-payment':
-        if (loanId) {
-          setSelectedLoanForPayment(loanId);
-          setViewMode("record-payment");
-        }
-        break;
-      case 'create-loan':
-        if (borrowerId) {
-          setSelectedBorrowerForLoan(borrowerId);
-        }
-        setViewMode("create-loan");
-        break;
-      case 'add-borrower':
-        setViewMode("add-borrower");
-        break;
-      default:
-        console.log("⚠️ Unknown mode:", mode);
+    if (mode && mode !== viewMode) {
+      switch (mode) {
+        case 'record-payment':
+          if (loanId) {
+            setSelectedLoanForPayment(loanId);
+            setViewMode("record-payment");
+          }
+          break;
+        case 'create-loan':
+          if (borrowerId) {
+            setSelectedBorrowerForLoan(borrowerId);
+          }
+          setViewMode("create-loan");
+          break;
+        case 'add-borrower':
+          setViewMode("add-borrower");
+          break;
+        default:
+          console.log("⚠️ Unknown mode:", mode);
+      }
     }
-  }
-}, [initialized, isAuthenticated, isLender, searchParams, viewMode]);
+  }, [initialized, isAuthenticated, isLender, searchParams, viewMode]);
+
   // Load dashboard data
   React.useEffect(() => {
     if (!user || !isLender) return;
     loadDashboardData();
   }, [user, isLender]);
 
-  const clearUrlParams = () => {
-    // Clear URL parameters after processing them
-    router.replace('/dashboard/lender', undefined);
+  // Monthly EMI Calculation Function - Current Month Earnings Only
+  const calculateCurrentMonthEarnings = async (loans: LoanSummary[]) => {
+    try {
+      // Get current month date range
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth(); // 0-based (0 = Jan, 11 = Dec)
+      
+      const startOfMonth = new Date(currentYear, currentMonth, 1);
+      const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
+      
+      const startDate = startOfMonth.toISOString().split('T')[0];
+      const endDate = endOfMonth.toISOString().split('T')[0];
+      
+      console.log(`📅 Calculating earnings for ${startDate} to ${endDate}`);
+
+      // Get all loan IDs
+      const loanIds = loans.map(loan => loan.id);
+      
+      if (loanIds.length === 0) {
+        return 0;
+      }
+
+      // Get EMIs for current month - either due in this month OR paid in this month
+      const { data: currentMonthEMIs, error } = await supabase
+        .from('emis')
+        .select('id, loan_id, amount, due_date, paid_date, paid_amount')
+        .in('loan_id', loanIds)
+        .or(`due_date.gte.${startDate},due_date.lte.${endDate},paid_date.gte.${startDate},paid_date.lte.${endDate}`);
+
+      if (error) {
+        console.error('Failed to fetch current month EMIs:', error);
+        return 0;
+      }
+
+      if (!currentMonthEMIs || currentMonthEMIs.length === 0) {
+        console.log('📊 No EMIs found for current month');
+        return 0;
+      }
+
+      let totalEarnings = 0;
+      let dueThisMonth = 0;
+      let paidThisMonth = 0;
+
+      currentMonthEMIs.forEach(emi => {
+        const dueDate = new Date(emi.due_date);
+        const paidDate = emi.paid_date ? new Date(emi.paid_date) : null;
+        const paidAmount = emi.paid_amount || 0;
+        
+        // Check if EMI is due in current month
+        const isDueThisMonth = dueDate >= startOfMonth && dueDate <= endOfMonth;
+        
+        // Check if EMI was paid in current month
+        const isPaidThisMonth = paidDate && paidDate >= startOfMonth && paidDate <= endOfMonth;
+
+        if (isDueThisMonth) {
+          dueThisMonth += emi.amount;
+          console.log(`📊 Due this month: Loan ${emi.loan_id} - ₹${emi.amount} (Due: ${emi.due_date})`);
+        }
+
+        if (isPaidThisMonth) {
+          paidThisMonth += paidAmount;
+          console.log(`📊 Paid this month: Loan ${emi.loan_id} - ₹${paidAmount} (Paid: ${emi.paid_date})`);
+        }
+
+        // For earnings calculation, count EMIs that are due this month
+        // regardless of payment status (this shows expected earnings)
+        if (isDueThisMonth) {
+          totalEarnings += emi.amount;
+        }
+      });
+
+      console.log(`📅 Current Month Summary:`);
+      console.log(`📊 EMIs Due This Month: ₹${dueThisMonth.toLocaleString()}`);
+      console.log(`💰 EMIs Paid This Month: ₹${paidThisMonth.toLocaleString()}`);
+      console.log(`🎯 Total Expected Earnings: ₹${totalEarnings.toLocaleString()}`);
+
+      return totalEarnings;
+
+    } catch (error) {
+      console.error('Error calculating current month earnings:', error);
+      return 0;
+    }
   };
 
   const loadDashboardData = async () => {
@@ -784,7 +883,7 @@ React.useEffect(() => {
 
       if (!loansData || loansData.length === 0) {
         setLoans([]);
-        updateStats({ loans: 0, dueEmis: 0, totalAmount: 0 });
+        updateStats({ loans: 0, dueEmis: 0, currentMonthEarnings: 0 });
         return;
       }
 
@@ -810,90 +909,95 @@ React.useEffect(() => {
       }
 
       let totalDueEmis = 0;
- // Replace the transformedLoans mapping in /app/dashboard/lender/page.tsx loadLoans function
+      const transformedLoans: LoanSummary[] = loansData.map((loan) => {
+        const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
+        const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
 
-const transformedLoans: LoanSummary[] = loansData.map((loan) => {
-  const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
-  const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
+        const totalEMIs = loanEMIs.length;
+        const paidEMIs = loanEMIs.filter((e) => {
+          const paidAmount = e.paid_amount || 0;
+          return paidAmount >= e.amount;
+        }).length;
 
-  const totalEMIs = loanEMIs.length;
-  const paidEMIs = loanEMIs.filter((e) => {
-    const paidAmount = e.paid_amount || 0;
-    return paidAmount >= e.amount;
-  }).length;
+        const partialEMIs = loanEMIs.filter((e) => {
+          const paidAmount = e.paid_amount || 0;
+          return paidAmount > 0 && paidAmount < e.amount;
+        });
 
-  const partialEMIs = loanEMIs.filter((e) => {
-    const paidAmount = e.paid_amount || 0;
-    return paidAmount > 0 && paidAmount < e.amount;
-  });
+        const pendingEMIs = loanEMIs.filter((e) => {
+          const paidAmount = e.paid_amount || 0;
+          return paidAmount === 0;
+        });
 
-  const pendingEMIs = loanEMIs.filter((e) => {
-    const paidAmount = e.paid_amount || 0;
-    return paidAmount === 0;
-  });
+        // Calculate due EMIs (unpaid EMIs that are due or overdue)
+        const today = new Date();
+        const dueEMIs = [...partialEMIs, ...pendingEMIs].filter((e) => {
+          const dueDate = new Date(e.due_date);
+          return dueDate <= today;
+        });
 
-  const totalPaid = loanEMIs.reduce((sum, emi) => {
-    const paidAmount = emi.paid_amount || 0;
-    return sum + Math.min(paidAmount, emi.amount);
-  }, 0);
+        totalDueEmis += dueEMIs.length;
 
-  const outstandingBalance = Math.max(
-    0,
-    (loan.total_amount || loan.principal_amount) - totalPaid
-  );
+        const totalPaid = loanEMIs.reduce((sum, emi) => {
+          const paidAmount = emi.paid_amount || 0;
+          return sum + Math.min(paidAmount, emi.amount);
+        }, 0);
 
-  const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
-    (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
-  );
-  const nextDueEMI = unpaidEMIs[0];
+        const outstandingBalance = Math.max(
+          0,
+          (loan.total_amount || loan.principal_amount) - totalPaid
+        );
 
-  const loanData = {
-    id: loan.id,
-    loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
-    borrower_name: borrower?.full_name || "Unknown",
-    principal_amount: loan.principal_amount,
-    total_amount: loan.total_amount || loan.principal_amount,
-    status: loan.status,
-    disbursement_date: loan.disbursement_date || loan.created_at,
-    pending_emis: pendingEMIs.length + partialEMIs.length,
-    total_emis: totalEMIs,
-    paid_emis: paidEMIs,
-    outstanding_balance: outstandingBalance,
-    next_due_date: nextDueEMI?.due_date || null,
-    next_due_amount: nextDueEMI
-      ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0)
-      : 0,
-    purpose: loan.purpose || null,     // ✅ Added
-    notes: loan.notes || null,         // ✅ Added
-    emis: loanEMIs // Include EMI data for status calculation
-  };
+        const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
+          (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+        );
+        const nextDueEMI = unpaidEMIs[0];
 
-  // Calculate smart status
-  const smartStatus = calculateLoanStatus(loanData);
+        const loanData = {
+          id: loan.id,
+          loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
+          borrower_name: borrower?.full_name || "Unknown",
+          principal_amount: loan.principal_amount,
+          total_amount: loan.total_amount || loan.principal_amount,
+          status: loan.status,
+          disbursement_date: loan.disbursement_date || loan.created_at,
+          pending_emis: pendingEMIs.length + partialEMIs.length,
+          total_emis: totalEMIs,
+          paid_emis: paidEMIs,
+          outstanding_balance: outstandingBalance,
+          next_due_date: nextDueEMI?.due_date || null,
+          next_due_amount: nextDueEMI
+            ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0)
+            : 0,
+          purpose: loan.purpose || null,
+          notes: loan.notes || null,
+          emis: loanEMIs // Include EMI data for status calculation
+        };
 
-  return {
-    ...loanData,
-    status: smartStatus // ✅ Use calculated status
-  };
-});
+        // Calculate smart status
+        const smartStatus = calculateLoanStatus(loanData);
+
+        return {
+          ...loanData,
+          status: smartStatus // Use calculated status
+        };
+      });
 
       setLoans(transformedLoans);
 
-      const totalDisbursedAmount = transformedLoans.reduce(
-        (sum, loan) => sum + loan.principal_amount,
-        0
-      );
+      // Calculate current month earnings (EMIs due in current month)
+      const currentMonthEarnings = await calculateCurrentMonthEarnings(transformedLoans);
 
       updateStats({ 
         loans: transformedLoans.length, 
         dueEmis: totalDueEmis, 
-        totalAmount: totalDisbursedAmount // Use the updated value
+        currentMonthEarnings: currentMonthEarnings
       });
 
     } catch (error: unknown) {
       console.error("❌ LENDER - Failed to load loans:", error);
       setLoans([]);
-      updateStats({ loans: 0, dueEmis: 0, totalAmount: 0 });
+      updateStats({ loans: 0, dueEmis: 0, currentMonthEarnings: 0 });
     } finally {
       setLoading(prev => ({ ...prev, loans: false, stats: false }));
     }
@@ -903,13 +1007,13 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
     borrowers: number;
     loans: number;
     dueEmis: number;
-    totalAmount: number;
+    currentMonthEarnings: number;
   }>) => {
     setStats(prev => ({
       totalBorrowers: updates.borrowers ?? prev.totalBorrowers,
       activeLoans: updates.loans ?? prev.activeLoans,
       dueEmis: updates.dueEmis ?? prev.dueEmis,
-      totalLoanAmount: updates.totalAmount ?? prev.totalLoanAmount,
+      currentMonthEarnings: updates.currentMonthEarnings ?? prev.currentMonthEarnings,
     }));
   };
 
@@ -926,27 +1030,26 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
     router.push('/dashboard/lender/emis');
   };
 
- // Replace these success handler functions in the dashboard component
+  // Success handlers
+  const handleAddBorrowerSuccess = () => {
+    setViewMode("dashboard");
+    router.replace('/dashboard/lender');
+    loadDashboardData();
+  };
 
-const handleAddBorrowerSuccess = () => {
-  setViewMode("dashboard");
-  router.replace('/dashboard/lender'); // Clear URL params
-  loadDashboardData();
-};
+  const handleCreateLoanSuccess = (loanId: string) => {
+    setViewMode("dashboard");
+    setSelectedBorrowerForLoan("");
+    router.replace('/dashboard/lender');
+    loadDashboardData();
+  };
 
-const handleCreateLoanSuccess = (loanId: string) => {
-  setViewMode("dashboard");
-  setSelectedBorrowerForLoan("");
-  router.replace('/dashboard/lender'); // Clear URL params
-  loadDashboardData();
-};
-
-const handleRecordPaymentSuccess = (paymentId: string) => {
-  setViewMode("dashboard");
-  setSelectedLoanForPayment("");
-  router.replace('/dashboard/lender'); // Clear URL params
-  loadDashboardData();
-};
+  const handleRecordPaymentSuccess = (paymentId: string) => {
+    setViewMode("dashboard");
+    setSelectedLoanForPayment("");
+    router.replace('/dashboard/lender');
+    loadDashboardData();
+  };
 
   // Modal handlers
   const handleViewLoanDetails = (loan: LoanSummary) => {
@@ -1005,25 +1108,24 @@ const handleRecordPaymentSuccess = (paymentId: string) => {
       <DashboardLayout>
         <div className="max-w-2xl mx-auto p-6">
           <div className="mb-6">
-          <Button
-  variant="outline"
-  onClick={() => {
-    setViewMode("dashboard");
-    router.replace('/dashboard/lender'); // Clear URL params
-  }}
-  size="sm"
->
-  ← Back to Dashboard
-</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setViewMode("dashboard");
+                router.replace('/dashboard/lender');
+              }}
+              size="sm"
+            >
+              ← Back to Dashboard
+            </Button>
           </div>
-          
-<AddBorrowerForm
-  onSuccess={handleAddBorrowerSuccess}
-  onCancel={() => {
-    setViewMode("dashboard");
-    router.replace('/dashboard/lender'); // Clear URL params
-  }}
-/>
+          <AddBorrowerForm
+            onSuccess={handleAddBorrowerSuccess}
+            onCancel={() => {
+              setViewMode("dashboard");
+              router.replace('/dashboard/lender');
+            }}
+          />
         </div>
       </DashboardLayout>
     );
@@ -1034,27 +1136,27 @@ const handleRecordPaymentSuccess = (paymentId: string) => {
       <DashboardLayout>
         <div className="max-w-4xl mx-auto p-6">
           <div className="mb-6">
-          <Button
-  variant="outline"
-  onClick={() => {
-    setViewMode("dashboard");
-    setSelectedBorrowerForLoan("");
-    router.replace('/dashboard/lender'); // Clear URL params
-  }}
-  size="sm"
->
-  ← Back to Dashboard
-</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setViewMode("dashboard");
+                setSelectedBorrowerForLoan("");
+                router.replace('/dashboard/lender');
+              }}
+              size="sm"
+            >
+              ← Back to Dashboard
+            </Button>
           </div>
           <CreateLoanForm
-  borrowerId={selectedBorrowerForLoan}
-  onSuccess={handleCreateLoanSuccess}
-  onCancel={() => {
-    setViewMode("dashboard");
-    setSelectedBorrowerForLoan("");
-    router.replace('/dashboard/lender'); // Clear URL params
-  }}
-/>
+            borrowerId={selectedBorrowerForLoan}
+            onSuccess={handleCreateLoanSuccess}
+            onCancel={() => {
+              setViewMode("dashboard");
+              setSelectedBorrowerForLoan("");
+              router.replace('/dashboard/lender');
+            }}
+          />
         </div>
       </DashboardLayout>
     );
@@ -1065,27 +1167,27 @@ const handleRecordPaymentSuccess = (paymentId: string) => {
       <DashboardLayout>
         <div className="max-w-3xl mx-auto p-6">
           <div className="mb-6">
-          <Button
-  variant="outline"
-  onClick={() => {
-    setViewMode("dashboard");
-    setSelectedLoanForPayment("");
-    router.replace('/dashboard/lender'); // Clear URL params
-  }}
-  size="sm"
->
-  ← Back to Dashboard
-</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setViewMode("dashboard");
+                setSelectedLoanForPayment("");
+                router.replace('/dashboard/lender');
+              }}
+              size="sm"
+            >
+              ← Back to Dashboard
+            </Button>
           </div>
           <RecordPaymentForm
-  loanId={selectedLoanForPayment}
-  onSuccess={handleRecordPaymentSuccess}
-  onCancel={() => {
-    setViewMode("dashboard");
-    setSelectedLoanForPayment("");
-    router.replace('/dashboard/lender'); // Clear URL params
-  }}
-/>
+            loanId={selectedLoanForPayment}
+            onSuccess={handleRecordPaymentSuccess}
+            onCancel={() => {
+              setViewMode("dashboard");
+              setSelectedLoanForPayment("");
+              router.replace('/dashboard/lender');
+            }}
+          />
         </div>
       </DashboardLayout>
     );
@@ -1144,11 +1246,11 @@ const handleRecordPaymentSuccess = (paymentId: string) => {
               subtitle="Require attention"
             />
             <StatsCard
-              title="Total Loan Amount"
-              value={formatCurrency(stats.totalLoanAmount)}
-              icon={DollarSign}
+              title="This Month Earnings"
+              value={formatCurrency(stats.currentMonthEarnings)}
+              icon={TrendingUp}
               loading={loading.stats}
-              subtitle="Portfolio value"
+              subtitle={`EMIs due in ${new Date().toLocaleDateString('en-US', { month: 'long' })}`}
             />
           </div>
 

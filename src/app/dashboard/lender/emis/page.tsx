@@ -109,6 +109,7 @@ function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower, onMarkPaid }
     }
   }
 
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
@@ -595,6 +596,8 @@ export default function LenderEMIManagement() {
   const [searchQuery, setSearchQuery] = React.useState('')
   const [statusFilter, setStatusFilter] = React.useState('all')
   const [priorityFilter, setPriorityFilter] = React.useState('all')
+  const [sortOption, setSortOption] = React.useState('priority-due-date') // Default current behavior
+  const [selectedMonth, setSelectedMonth] = React.useState('all') // Format: 'YYYY-MM' or 'all'
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1)
@@ -646,6 +649,49 @@ export default function LenderEMIManagement() {
     if (daysDiff <= 3) return 'due_soon'
     return 'upcoming'
   }
+
+  // Calculate EMI distribution by month
+const getEMIsByMonth = React.useMemo(() => {
+  const monthlyDistribution = new Map()
+  
+  emis.forEach(emi => {
+    const dueDate = new Date(emi.due_date)
+    const monthKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`
+    const monthLabel = dueDate.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long' 
+    })
+    
+    if (!monthlyDistribution.has(monthKey)) {
+      monthlyDistribution.set(monthKey, {
+        key: monthKey,
+        label: monthLabel,
+        count: 0,
+        totalAmount: 0,
+        paidCount: 0,
+        overdueCount: 0,
+        dueCount: 0
+      })
+    }
+    
+    const monthData = monthlyDistribution.get(monthKey)
+    monthData.count++
+    monthData.totalAmount += emi.amount
+    
+    if (emi.calculated_status === 'paid') {
+      monthData.paidCount++
+    } else if (emi.calculated_status === 'overdue') {
+      monthData.overdueCount++
+    } else {
+      monthData.dueCount++
+    }
+  })
+  
+  // Sort by month (newest first)
+  return Array.from(monthlyDistribution.values()).sort((a, b) => {
+    return b.key.localeCompare(a.key)
+  })
+}, [emis])
 
   const calculatePriority = (emi: any, status: string): 'high' | 'medium' | 'low' => {
     if (status === 'overdue') return 'high'
@@ -843,45 +889,115 @@ export default function LenderEMIManagement() {
     }
   }
 
-  // Filter EMIs based on search and filters
-  const filteredEMIs = React.useMemo(() => {
-    let filtered = emis
+// Filter and Sort EMIs (including month filter)
+const sortedEMIs = React.useMemo(() => {
+  let filtered = emis
 
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(emi =>
-        emi.loan_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emi.borrower_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emi.borrower_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emi.borrower_phone?.includes(searchQuery) ||
-        emi.emi_number.toString().includes(searchQuery)
-      )
-    }
+  // Search filter
+  if (searchQuery) {
+    filtered = filtered.filter(emi =>
+      emi.loan_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emi.borrower_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emi.borrower_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emi.borrower_phone?.includes(searchQuery) ||
+      emi.emi_number.toString().includes(searchQuery)
+    )
+  }
 
-    // Status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(emi => emi.calculated_status === statusFilter)
-    }
+  // Status filter
+  if (statusFilter !== 'all') {
+    filtered = filtered.filter(emi => emi.calculated_status === statusFilter)
+  }
 
-    // Priority filter
-    if (priorityFilter !== 'all') {
-      filtered = filtered.filter(emi => emi.priority_level === priorityFilter)
-    }
+  // Priority filter
+  if (priorityFilter !== 'all') {
+    filtered = filtered.filter(emi => emi.priority_level === priorityFilter)
+  }
 
-    return filtered
-  }, [emis, searchQuery, statusFilter, priorityFilter])
+  // ✅ NEW: Month filter
+  if (selectedMonth !== 'all') {
+    filtered = filtered.filter(emi => {
+      const dueDate = new Date(emi.due_date)
+      const emiMonth = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`
+      return emiMonth === selectedMonth
+    })
+  }
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredEMIs.length / itemsPerPage)
-  const paginatedEMIs = React.useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage
-    return filteredEMIs.slice(startIndex, startIndex + itemsPerPage)
-  }, [filteredEMIs, currentPage, itemsPerPage])
+  // Apply sorting (your existing sorting logic)
+  switch (sortOption) {
+    case 'due-date-newest':
+      filtered.sort((a, b) => {
+        return new Date(b.due_date).getTime() - new Date(a.due_date).getTime()
+      })
+      break
 
-  // Reset page when filters change
-  React.useEffect(() => {
-    setCurrentPage(1)
-  }, [searchQuery, statusFilter, priorityFilter])
+    case 'due-date-oldest':
+      filtered.sort((a, b) => {
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      })
+      break
+
+    case 'days-overdue-most':
+      filtered.sort((a, b) => {
+        return b.days_overdue - a.days_overdue
+      })
+      break
+
+    case 'days-overdue-recent':
+      filtered.sort((a, b) => {
+        if (a.is_overdue && !b.is_overdue) return -1
+        if (!a.is_overdue && b.is_overdue) return 1
+        if (a.is_overdue && b.is_overdue) {
+          return a.days_overdue - b.days_overdue
+        }
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      })
+      break
+
+    case 'amount-high':
+      filtered.sort((a, b) => {
+        return b.amount - a.amount
+      })
+      break
+
+    case 'amount-low':
+      filtered.sort((a, b) => {
+        return a.amount - b.amount
+      })
+      break
+
+    case 'borrower-name':
+      filtered.sort((a, b) => {
+        return a.borrower_name.localeCompare(b.borrower_name)
+      })
+      break
+
+    case 'priority-due-date':
+    default:
+      filtered.sort((a, b) => {
+        const priorityOrder = { high: 3, medium: 2, low: 1 }
+        const priorityDiff = priorityOrder[b.priority_level] - priorityOrder[a.priority_level]
+        if (priorityDiff !== 0) return priorityDiff
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      })
+  }
+
+  return filtered
+}, [emis, searchQuery, statusFilter, priorityFilter, selectedMonth, sortOption]) // ✅ ADD selectedMonth
+
+ // Pagination calculations
+const totalPages = Math.ceil(sortedEMIs.length / itemsPerPage) // ✅ CHANGE filteredEMIs to sortedEMIs
+const paginatedEMIs = React.useMemo(() => {
+  const startIndex = (currentPage - 1) * itemsPerPage
+  return sortedEMIs.slice(startIndex, startIndex + itemsPerPage) // ✅ CHANGE filteredEMIs to sortedEMIs
+}, [sortedEMIs, currentPage, itemsPerPage]) // ✅ CHANGE filteredEMIs to sortedEMIs
+
+ // Reset page when filters change
+React.useEffect(() => {
+  setCurrentPage(1)
+}, [searchQuery, statusFilter, priorityFilter, sortOption,selectedMonth]) // ✅ ADD sortOption
+
+
 
   // Generate page numbers for pagination
   const getPageNumbers = () => {
@@ -947,29 +1063,29 @@ export default function LenderEMIManagement() {
   }
 
   // Calculate summary stats
-  const summaryStats = React.useMemo(() => {
-    const totalEMIs = filteredEMIs.length
-    const paidEMIs = filteredEMIs.filter(e => e.calculated_status === 'paid').length
-    const overdueEMIs = filteredEMIs.filter(e => e.calculated_status === 'overdue').length
-    const dueTodayEMIs = filteredEMIs.filter(e => e.calculated_status === 'due_today').length
-    const dueSoonEMIs = filteredEMIs.filter(e => e.calculated_status === 'due_soon').length
-    const highPriorityEMIs = filteredEMIs.filter(e => e.priority_level === 'high').length
-    const totalAmount = filteredEMIs.reduce((sum, e) => sum + e.amount, 0)
-    const totalCollected = filteredEMIs.reduce((sum, e) => sum + e.paid_amount, 0)
-    const totalOutstanding = filteredEMIs.reduce((sum, e) => sum + e.remaining_amount, 0)
+const summaryStats = React.useMemo(() => {
+  const totalEMIs = sortedEMIs.length // ✅ CHANGE HERE
+  const paidEMIs = sortedEMIs.filter(e => e.calculated_status === 'paid').length // ✅ CHANGE HERE
+  const overdueEMIs = sortedEMIs.filter(e => e.calculated_status === 'overdue').length // ✅ CHANGE HERE
+  const dueTodayEMIs = sortedEMIs.filter(e => e.calculated_status === 'due_today').length // ✅ CHANGE HERE
+  const dueSoonEMIs = sortedEMIs.filter(e => e.calculated_status === 'due_soon').length // ✅ CHANGE HERE
+  const highPriorityEMIs = sortedEMIs.filter(e => e.priority_level === 'high').length // ✅ CHANGE HERE
+  const totalAmount = sortedEMIs.reduce((sum, e) => sum + e.amount, 0) // ✅ CHANGE HERE
+  const totalCollected = sortedEMIs.reduce((sum, e) => sum + e.paid_amount, 0) // ✅ CHANGE HERE
+  const totalOutstanding = sortedEMIs.reduce((sum, e) => sum + e.remaining_amount, 0) // ✅ CHANGE HERE
 
-    return {
-      totalEMIs,
-      paidEMIs,
-      overdueEMIs,
-      dueTodayEMIs,
-      dueSoonEMIs,
-      highPriorityEMIs,
-      totalAmount,
-      totalCollected,
-      totalOutstanding
-    }
-  }, [filteredEMIs])
+  return {
+    totalEMIs,
+    paidEMIs,
+    overdueEMIs,
+    dueTodayEMIs,
+    dueSoonEMIs,
+    highPriorityEMIs,
+    totalAmount,
+    totalCollected,
+    totalOutstanding
+  }
+}, [sortedEMIs]) // ✅ CHANGE filteredEMIs to sortedEMIs
 
   // Loading state
   if (!initialized) {
@@ -1008,9 +1124,14 @@ export default function LenderEMIManagement() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">My Borrowers' EMIs</h1>
-              <p className="mt-2 text-sm text-gray-600">
-                Track and manage EMI payments from your borrowers • {filteredEMIs.length} of {emis.length} EMIs
-              </p>
+              <p className="text-sm text-gray-600 mt-2">
+  Track and manage EMI payments from your borrowers • {sortedEMIs.length} of {emis.length} EMIs
+  {selectedMonth !== 'all' && (
+    <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+      Filtered by {getEMIsByMonth.find(m => m.key === selectedMonth)?.label || selectedMonth}
+    </span>
+  )}
+</p>
             </div>
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
               <Button
@@ -1071,59 +1192,160 @@ export default function LenderEMIManagement() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="bg-white border border-gray-200 rounded-xl mb-6 shadow-sm">
-          <div className="p-6">
-            <div className="space-y-4">
-              {/* Search */}
-              <div>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search by borrower name, email, phone, or loan number..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 h-12 text-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Filters Row */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Status Filter */}
-                <div>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="overdue">Overdue</option>
-                    <option value="due_today">Due Today</option>
-                    <option value="due_soon">Due Soon</option>
-                    <option value="paid">Paid</option>
-                    <option value="upcoming">Upcoming</option>
-                    <option value="partial">Partially Paid</option>
-                  </select>
-                </div>
-
-                {/* Priority Filter */}
-                <div>
-                  <select
-                    value={priorityFilter}
-                    onChange={(e) => setPriorityFilter(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
-                  >
-                    <option value="all">All Priority</option>
-                    <option value="high">High Priority</option>
-                    <option value="medium">Medium Priority</option>
-                    <option value="low">Low Priority</option>
-                  </select>
-                </div>
+        {/* Monthly EMI Distribution Overview */}
+<div className="bg-white border border-gray-200 rounded-xl mb-6 shadow-sm">
+  <div className="px-6 py-4 border-b border-gray-200">
+    <h3 className="text-lg font-semibold text-gray-900">EMI Distribution by Month</h3>
+    <p className="text-sm text-gray-600">Cash flow planning and monthly collections overview</p>
+  </div>
+  <div className="p-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+      {getEMIsByMonth.slice(0, 12).map((month) => (
+        <button
+          key={month.key}
+          onClick={() => setSelectedMonth(selectedMonth === month.key ? 'all' : month.key)}
+          className={cn(
+            "p-3 rounded-lg border text-left transition-all duration-200 hover:shadow-md",
+            selectedMonth === month.key
+              ? "border-blue-500 bg-blue-50 shadow-md"
+              : "border-gray-200 bg-white hover:border-gray-300"
+          )}
+        >
+          <div className="space-y-1">
+            <p className={cn(
+              "text-sm font-semibold",
+              selectedMonth === month.key ? "text-blue-900" : "text-gray-900"
+            )}>
+              {month.label}
+            </p>
+            <div className="space-y-0.5">
+              <p className={cn(
+                "text-lg font-bold",
+                selectedMonth === month.key ? "text-blue-700" : "text-gray-700"
+              )}>
+                {month.count} EMIs
+              </p>
+              <p className="text-xs text-gray-600">
+                {formatCurrency(month.totalAmount)}
+              </p>
+              <div className="flex space-x-2 text-xs">
+                {month.paidCount > 0 && (
+                  <span className="text-green-600">✓{month.paidCount}</span>
+                )}
+                {month.overdueCount > 0 && (
+                  <span className="text-red-600">⚠{month.overdueCount}</span>
+                )}
+                {month.dueCount > 0 && (
+                  <span className="text-blue-600">📅{month.dueCount}</span>
+                )}
               </div>
             </div>
           </div>
+        </button>
+      ))}
+    </div>
+    
+    {/* Show All Months Button */}
+    {getEMIsByMonth.length > 12 && (
+      <div className="mt-4 text-center">
+        <button
+          onClick={() => console.log('Show all months modal')}
+          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+        >
+          View All {getEMIsByMonth.length} Months →
+        </button>
+      </div>
+    )}
+  </div>
+</div>
+
+ {/* Enhanced Filters with Month Selection */}
+<div className="bg-white border border-gray-200 rounded-xl mb-6 shadow-sm">
+  <div className="p-6">
+    <div className="space-y-4">
+      {/* Search */}
+      <div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Search by borrower name, email, phone, or loan number..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 h-12 text-sm"
+          />
         </div>
+      </div>
+
+      {/* Filters Row - NOW 4 COLUMNS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Month/Year Filter */}
+        <div>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
+          >
+            <option value="all">All Months</option>
+            {getEMIsByMonth.map((month) => (
+              <option key={month.key} value={month.key}>
+                {month.label} ({month.count} EMIs)
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Status Filter */}
+        <div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
+          >
+            <option value="all">All Status</option>
+            <option value="overdue">Overdue</option>
+            <option value="due_today">Due Today</option>
+            <option value="due_soon">Due Soon</option>
+            <option value="paid">Paid</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="partial">Partially Paid</option>
+          </select>
+        </div>
+
+        {/* Priority Filter */}
+        <div>
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
+          >
+            <option value="all">All Priority</option>
+            <option value="high">High Priority</option>
+            <option value="medium">Medium Priority</option>
+            <option value="low">Low Priority</option>
+          </select>
+        </div>
+
+        {/* Sort Options */}
+        <div>
+          <select
+            value={sortOption}
+            onChange={(e) => setSortOption(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
+          >
+            <option value="priority-due-date">Default (Priority + Oldest)</option>
+            <option value="due-date-newest">📅 Recently Overdue First</option>
+            <option value="due-date-oldest">📅 Oldest Overdue First</option>
+            <option value="days-overdue-most">⏰ Most Overdue Days</option>
+            <option value="days-overdue-recent">⏰ Recently Overdue</option>
+            <option value="amount-high">💰 Amount: High to Low</option>
+            <option value="amount-low">💰 Amount: Low to High</option>
+            <option value="borrower-name">👤 Borrower Name (A-Z)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Bulk Actions */}
         {selectedEMIs.length > 0 && (
@@ -1201,7 +1423,7 @@ export default function LenderEMIManagement() {
               </div>
             ))}
           </div>
-        ) : filteredEMIs.length === 0 ? (
+        ) : sortedEMIs.length === 0 ? (
           <div className="text-center py-16">
             <Calendar className="h-16 w-16 mx-auto mb-4 text-gray-300" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No EMIs found</h3>
@@ -1254,7 +1476,7 @@ export default function LenderEMIManagement() {
             {/* Pagination */}
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
               <div className="text-sm text-gray-600">
-                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredEMIs.length)} of {filteredEMIs.length} EMIs
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, sortedEMIs.length)} of {sortedEMIs.length} EMIs
               </div>
               
               <div className="flex items-center space-x-2">
