@@ -35,6 +35,8 @@ interface LoanCardProps {
     outstanding_balance: number
     next_due_date: string | null
     next_due_amount: number
+    purpose?: string
+    notes?: string
   }
   onRecordPayment: (loanId: string) => void
   onViewDetails: (loanId: string) => void
@@ -148,6 +150,23 @@ export function LoanCard({
             </p>
           </div>
         </div>
+      {/* Purpose and Notes Section */}
+      {(loan.purpose || loan.notes) && (
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+            {loan.purpose && (
+              <div className="mb-2">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Purpose</p>
+                <p className="text-sm text-gray-700">{loan.purpose}</p>
+              </div>
+            )}
+            {loan.notes && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Notes</p>
+                <p className="text-sm text-gray-700">{loan.notes}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Progress */}
         <div className="space-y-2">

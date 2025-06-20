@@ -15,21 +15,19 @@ import {
   Download
 } from "lucide-react";
 
-interface LoanSummary {
-  id: string;
-  loan_number: string;
-  borrower_name: string;
-  principal_amount: number;
-  total_amount: number;
-  status: string;
-  disbursement_date: string;
-  pending_emis: number;
-  total_emis: number;
-  paid_emis: number;
-  outstanding_balance: number;
-  next_due_date: string | null;
-  next_due_amount: number;
-}
+import { LoanSummary, calculateLoanStatus } from '@/lib/loan-utils';
+import { UnifiedLoanCard } from '@/components/ui/unified-loan-card';
+import {
+  X,
+  TrendingUp,
+  TrendingDown,
+  CheckCircle2,
+  AlertCircle
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+
 
 type FilterStatus = 'all' | 'active' | 'disbursed' | 'completed' | 'overdue';
 type SortOption = 'newest' | 'oldest' | 'amount-high' | 'amount-low' | 'status';
@@ -142,45 +140,72 @@ export default function LenderLoansPage() {
         .in("loan_id", loanIds);
 
       // Transform loans
-      const transformedLoans: LoanSummary[] = loansData.map(loan => {
-        const borrower = borrowersData?.find(b => b.id === loan.borrower_id);
-        const loanEMIs = (emisData || []).filter(e => e.loan_id === loan.id);
+  // Replace the transformedLoans mapping in /app/dashboard/lender/page.tsx loadLoans function
 
-        const totalEMIs = loanEMIs.length;
-        const paidEMIs = loanEMIs.filter(e => (e.paid_amount || 0) >= e.amount).length;
-        const partialEMIs = loanEMIs.filter(e => {
-          const paid = e.paid_amount || 0;
-          return paid > 0 && paid < e.amount;
-        });
-        const pendingEMIs = loanEMIs.filter(e => (e.paid_amount || 0) === 0);
+const transformedLoans: LoanSummary[] = loansData.map((loan) => {
+  const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
+  const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
 
-        const totalPaid = loanEMIs.reduce((sum, emi) => {
-          return sum + Math.min(emi.paid_amount || 0, emi.amount);
-        }, 0);
+  const totalEMIs = loanEMIs.length;
+  const paidEMIs = loanEMIs.filter((e) => {
+    const paidAmount = e.paid_amount || 0;
+    return paidAmount >= e.amount;
+  }).length;
 
-        const outstandingBalance = Math.max(0, (loan.total_amount || loan.principal_amount) - totalPaid);
-        
-        const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
-          (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
-        );
-        const nextDueEMI = unpaidEMIs[0];
+  const partialEMIs = loanEMIs.filter((e) => {
+    const paidAmount = e.paid_amount || 0;
+    return paidAmount > 0 && paidAmount < e.amount;
+  });
 
-        return {
-          id: loan.id,
-          loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
-          borrower_name: borrower?.full_name || "Unknown",
-          principal_amount: loan.principal_amount,
-          total_amount: loan.total_amount || loan.principal_amount,
-          status: loan.status,
-          disbursement_date: loan.disbursement_date || loan.created_at,
-          pending_emis: pendingEMIs.length + partialEMIs.length,
-          total_emis: totalEMIs,
-          paid_emis: paidEMIs,
-          outstanding_balance: outstandingBalance,
-          next_due_date: nextDueEMI?.due_date || null,
-          next_due_amount: nextDueEMI ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0) : 0,
-        };
-      });
+  const pendingEMIs = loanEMIs.filter((e) => {
+    const paidAmount = e.paid_amount || 0;
+    return paidAmount === 0;
+  });
+
+  const totalPaid = loanEMIs.reduce((sum, emi) => {
+    const paidAmount = emi.paid_amount || 0;
+    return sum + Math.min(paidAmount, emi.amount);
+  }, 0);
+
+  const outstandingBalance = Math.max(
+    0,
+    (loan.total_amount || loan.principal_amount) - totalPaid
+  );
+
+  const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
+    (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+  );
+  const nextDueEMI = unpaidEMIs[0];
+
+  const loanData = {
+    id: loan.id,
+    loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
+    borrower_name: borrower?.full_name || "Unknown",
+    principal_amount: loan.principal_amount,
+    total_amount: loan.total_amount || loan.principal_amount,
+    status: loan.status,
+    disbursement_date: loan.disbursement_date || loan.created_at,
+    pending_emis: pendingEMIs.length + partialEMIs.length,
+    total_emis: totalEMIs,
+    paid_emis: paidEMIs,
+    outstanding_balance: outstandingBalance,
+    next_due_date: nextDueEMI?.due_date || null,
+    next_due_amount: nextDueEMI
+      ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0)
+      : 0,
+    purpose: loan.purpose || null,     // ✅ Added
+    notes: loan.notes || null,         // ✅ Added
+    emis: loanEMIs // Include EMI data for status calculation
+  };
+
+  // Calculate smart status
+  const smartStatus = calculateLoanStatus(loanData);
+
+  return {
+    ...loanData,
+    status: smartStatus // ✅ Use calculated status
+  };
+});
 
       setLoans(transformedLoans);
     } catch (error) {
@@ -361,16 +386,16 @@ export default function LenderLoansPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {loans.map((loan) => (
-                <LoanCard
-                  key={loan.id}
-                  loan={loan}
-                  onRecordPayment={(loanId) => handleRecordPayment(loanId)}
-                  onViewDetails={(loanId) => handleViewDetails(loanId)}
-                  formatCurrency={(amount) => formatCurrency(amount)}
-                  formatDate={(dateString) => formatDate(dateString)}
-                />
-              ))}
+   {filteredLoans.map((loan) => (
+  <UnifiedLoanCard
+    key={loan.id}
+    loan={loan}
+    onRecordPayment={(loanId) => handleRecordPayment(loanId)}
+    onViewDetails={(loan) => handleViewDetails(loan.id)}
+    formatCurrency={formatCurrency}
+    formatDate={formatDate}
+  />
+))}
               
               {/* Load More (if needed for pagination) */}
               {filteredLoans.length >= 20 && (

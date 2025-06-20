@@ -765,6 +765,8 @@ export default function CreateLoanForm({ borrowerId, onSuccess, onCancel }: Crea
         approved_by: user.id,
         approved_at: new Date().toISOString(),
         notes: formData.notes,
+        purpose: formData.purpose, // Add Loan Purpose here
+
         // Enhanced fields
         is_interest_only: formData.is_interest_only,
         current_principal_balance: formData.is_interest_only 

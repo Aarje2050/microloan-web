@@ -30,6 +30,8 @@ import AddBorrowerForm from "@/components/forms/add-borrower-form";
 import CreateLoanForm from "@/components/forms/loan/create-loan-form";
 import RecordPaymentForm from "@/components/forms/loan/record-payment-form";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { LoanSummary, calculateLoanStatus } from '@/lib/loan-utils';
+import { UnifiedLoanCard } from '@/components/ui/unified-loan-card';
 
 interface Borrower {
   id: string;
@@ -44,21 +46,7 @@ interface Borrower {
   created_at: string;
 }
 
-interface LoanSummary {
-  id: string;
-  loan_number: string;
-  borrower_name: string;
-  principal_amount: number;
-  total_amount: number;
-  status: string;
-  disbursement_date: string;
-  pending_emis: number;
-  total_emis: number;
-  paid_emis: number;
-  outstanding_balance: number;
-  next_due_date: string | null;
-  next_due_amount: number;
-}
+
 
 interface DashboardStats {
   totalBorrowers: number;
@@ -148,6 +136,7 @@ function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment }: LoanDetail
             <div>
               <h3 className="text-xl font-semibold text-gray-900">{loan.loan_number}</h3>
               <p className="text-sm text-gray-500 mt-1">Loan Details & Progress</p>
+
             </div>
             <button
               onClick={onClose}
@@ -478,97 +467,14 @@ interface LoanCardProps {
 }
 
 function LoanCard({ loan, onRecordPayment, onViewDetails }: LoanCardProps) {
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'overdue': return 'bg-red-100 text-red-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const progressPercentage = loan.total_emis > 0 ? (loan.paid_emis / loan.total_emis) * 100 : 0;
-
   return (
-    <Card className="bg-white border border-gray-200 hover:shadow-md transition-shadow">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <div className="flex items-center space-x-3 mb-2">
-              <h3 className="font-semibold text-gray-900">{loan.loan_number}</h3>
-              <Badge className={getStatusColor(loan.status)}>
-                {loan.status.toUpperCase()}
-              </Badge>
-            </div>
-            <p className="text-sm text-gray-600 font-medium">{loan.borrower_name}</p>
-            <p className="text-xs text-gray-500">Disbursed: {formatDate(loan.disbursement_date)}</p>
-          </div>
-          <button
-            onClick={() => onViewDetails(loan)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <Eye className="h-4 w-4 text-gray-400" />
-          </button>
-        </div>
-
-      {/* Replace Principal and Outstanding with Loan Amount (Disbursed) */}
-      <div className="grid grid-cols-1 gap-4 mb-4">
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Loan Amount (Disbursed)</p>
-            <p className="text-lg font-bold text-gray-900">{formatCurrency(loan.principal_amount)}</p>
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">EMI Progress</span>
-            <span className="text-xs font-bold text-gray-900">
-              {loan.paid_emis}/{loan.total_emis} ({Math.round(progressPercentage)}%)
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-              style={{ width: `${progressPercentage}%` }}
-            ></div>
-          </div>
-        </div>
-
-        {loan.next_due_date && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-orange-900">Next EMI Due</p>
-                <p className="text-xs text-orange-700">{formatDate(loan.next_due_date)}</p>
-              </div>
-              <p className="text-sm font-bold text-orange-900">{formatCurrency(loan.next_due_amount)}</p>
-            </div>
-          </div>
-        )}
-
-<div className="flex space-x-3">
-  <Button
-    size="sm"
-    variant="outline"
-    onClick={() => onViewDetails(loan)}
-    className="flex items-center justify-center px-4 gap-2 h-9 text-sm font-medium"
-  >
-    
-    View Details
-  </Button>
-
-  <Button
-    size="sm"
-    onClick={() => onRecordPayment(loan.id)}
-    className="flex items-center justify-center px-4 gap-2 h-9 text-sm font-medium"
-  >
-    Record Payment
-  </Button>
-</div>
-
-      </CardContent>
-    </Card>
+    <UnifiedLoanCard
+      loan={loan}
+      onRecordPayment={onRecordPayment}
+      onViewDetails={onViewDetails}
+      formatCurrency={formatCurrency}
+      formatDate={formatDate}
+    />
   );
 }
 
@@ -862,90 +768,72 @@ export default function LenderDashboard() {
       }
 
       let totalDueEmis = 0;
-      const transformedLoans: LoanSummary[] = loansData.map((loan) => {
-        const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
-        const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
+ // Replace the transformedLoans mapping in /app/dashboard/lender/page.tsx loadLoans function
 
-        const totalEMIs = loanEMIs.length;
-        const paidEMIs = loanEMIs.filter((e) => {
-          const paidAmount = e.paid_amount || 0;
-          return paidAmount >= e.amount;
-        }).length;
+const transformedLoans: LoanSummary[] = loansData.map((loan) => {
+  const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
+  const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
 
-        const partialEMIs = loanEMIs.filter((e) => {
-          const paidAmount = e.paid_amount || 0;
-          return paidAmount > 0 && paidAmount < e.amount;
-        });
+  const totalEMIs = loanEMIs.length;
+  const paidEMIs = loanEMIs.filter((e) => {
+    const paidAmount = e.paid_amount || 0;
+    return paidAmount >= e.amount;
+  }).length;
 
-        const pendingEMIs = loanEMIs.filter((e) => {
-          const paidAmount = e.paid_amount || 0;
-          return paidAmount === 0;
-        });
+  const partialEMIs = loanEMIs.filter((e) => {
+    const paidAmount = e.paid_amount || 0;
+    return paidAmount > 0 && paidAmount < e.amount;
+  });
 
-        // Calculate due EMIs (unpaid EMIs that are due or overdue)
-        const today = new Date();
-        const dueEMIs = [...partialEMIs, ...pendingEMIs].filter((e) => {
-          const dueDate = new Date(e.due_date);
-          return dueDate <= today;
-        });
+  const pendingEMIs = loanEMIs.filter((e) => {
+    const paidAmount = e.paid_amount || 0;
+    return paidAmount === 0;
+  });
 
-        totalDueEmis += dueEMIs.length;
+  const totalPaid = loanEMIs.reduce((sum, emi) => {
+    const paidAmount = emi.paid_amount || 0;
+    return sum + Math.min(paidAmount, emi.amount);
+  }, 0);
 
-        const totalPaid = loanEMIs.reduce((sum, emi) => {
-          const paidAmount = emi.paid_amount || 0;
-          return sum + Math.min(paidAmount, emi.amount);
-        }, 0);
+  const outstandingBalance = Math.max(
+    0,
+    (loan.total_amount || loan.principal_amount) - totalPaid
+  );
 
-        const outstandingBalance = Math.max(
-          0,
-          (loan.total_amount || loan.principal_amount) - totalPaid
-        );
+  const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
+    (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+  );
+  const nextDueEMI = unpaidEMIs[0];
 
-        const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
-          (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
-        );
-        const nextDueEMI = unpaidEMIs[0];
+  const loanData = {
+    id: loan.id,
+    loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
+    borrower_name: borrower?.full_name || "Unknown",
+    principal_amount: loan.principal_amount,
+    total_amount: loan.total_amount || loan.principal_amount,
+    status: loan.status,
+    disbursement_date: loan.disbursement_date || loan.created_at,
+    pending_emis: pendingEMIs.length + partialEMIs.length,
+    total_emis: totalEMIs,
+    paid_emis: paidEMIs,
+    outstanding_balance: outstandingBalance,
+    next_due_date: nextDueEMI?.due_date || null,
+    next_due_amount: nextDueEMI
+      ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0)
+      : 0,
+    purpose: loan.purpose || null,     // ✅ Added
+    notes: loan.notes || null,         // ✅ Added
+    emis: loanEMIs // Include EMI data for status calculation
+  };
 
-        // ✅ CORRECT STATUS CALCULATION based on EMIs and outstanding balance
-        let calculatedStatus = loan.status; // Start with database status
-        
-        // Calculate based on actual payment progress
-        if (outstandingBalance <= 0 && totalEMIs > 0 && paidEMIs === totalEMIs) {
-          calculatedStatus = 'completed'; // Fully paid
-        } else if (totalEMIs > 0 && outstandingBalance > 0) {
-          // Check for overdue EMIs
-          const overdueEMIs = [...partialEMIs, ...pendingEMIs].filter((e) => {
-            const dueDate = new Date(e.due_date);
-            return dueDate < today;
-          });
-          
-          if (overdueEMIs.length > 0) {
-            calculatedStatus = 'overdue';
-          } else if (paidEMIs > 0 || loan.disbursement_date) {
-            calculatedStatus = 'active'; // Has payments or is disbursed
-          }
-        } else if (loan.status === 'approved' && !loan.disbursement_date) {
-          calculatedStatus = 'pending'; // Approved but not disbursed
-        }
+  // Calculate smart status
+  const smartStatus = calculateLoanStatus(loanData);
 
-        return {
-          id: loan.id,
-          loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
-          borrower_name: borrower?.full_name || "Unknown",
-          principal_amount: loan.principal_amount,
-          total_amount: loan.total_amount || loan.principal_amount,
-          status: calculatedStatus, // Use calculated status
-          disbursement_date: loan.disbursement_date || loan.created_at,
-          pending_emis: pendingEMIs.length + partialEMIs.length,
-          total_emis: totalEMIs,
-          paid_emis: paidEMIs,
-          outstanding_balance: outstandingBalance,
-          next_due_date: nextDueEMI?.due_date || null,
-          next_due_amount: nextDueEMI
-            ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0)
-            : 0,
-        };
-      });
+  return {
+    ...loanData,
+    status: smartStatus // ✅ Use calculated status
+  };
+});
 
       setLoans(transformedLoans);
 
