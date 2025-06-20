@@ -1134,7 +1134,6 @@ export default function RecordPaymentForm({ loanId, emiId, onSuccess, onCancel }
       <div className="bg-green-600 text-white p-6 rounded-t-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <Receipt className="h-6 w-6 mr-3" />
             <div>
               <h2 className="text-xl font-bold">Record Payment</h2>
               <div className="flex items-center mt-1 space-x-4 text-sm opacity-90">

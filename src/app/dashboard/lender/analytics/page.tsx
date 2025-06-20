@@ -1,104 +1,934 @@
-// app/dashboard/admin/analytics/page.tsx - ANALYTICS DASHBOARD (Coming Soon Placeholder)
+// app/dashboard/lender/analytics/page.tsx - COMPREHENSIVE LENDER ANALYTICS
 'use client'
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 import DashboardLayout from '@/components/layout/dashboard-layout'
 import { 
-  BarChart3,
-  TrendingUp,
+  TrendingUp, 
   TrendingDown,
-  PieChart,
-  LineChart,
-  Users,
-  CreditCard,
+  Users, 
+  CreditCard, 
   DollarSign,
   Calendar,
-  Target,
-  Activity,
-  Zap,
+  PieChart,
+  BarChart3,
+  RefreshCw,
+  Download,
+  Eye,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  CheckCircle,
   Clock,
-  AlertCircle
+  Target,
+  Percent
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
 
-export default function AdminAnalytics() {
+// Analytics Interfaces
+interface OverallAnalytics {
+  totalLoanDisbursed: number
+  totalBorrowers: number
+  totalActiveLoans: number
+  totalCompletedLoans: number
+  totalOverdueLoans: number
+  averageLoanAmount: number
+  totalInterestEarned: number
+  totalPrincipalRecovered: number
+  portfolioHealth: number // percentage
+}
+
+interface MonthlyAnalytics {
+  month: string
+  monthKey: string
+  totalEMIAmount: number
+  totalInterestAmount: number
+  totalPrincipalAmount: number
+  emisDue: number
+  emisPaid: number
+  collectionRate: number // percentage
+}
+
+interface BorrowerAnalytics {
+  borrower_id: string
+  borrower_name: string
+  borrower_email: string
+  total_loans: number
+  total_amount_borrowed: number
+  total_emis_due: number
+  total_emis_paid: number
+  total_interest_due: number
+  total_interest_paid: number
+  total_principal_due: number
+  total_principal_paid: number
+  total_outstanding: number
+  first_loan_date: string
+  last_payment_date: string | null
+  payment_consistency: number // percentage
+  risk_level: 'low' | 'medium' | 'high'
+}
+
+interface AnalyticsState {
+  overall: OverallAnalytics
+  monthly: MonthlyAnalytics[]
+  borrowers: BorrowerAnalytics[]
+  loading: boolean
+  error: string | null
+  refreshing: boolean
+}
+
+interface AnalyticsCardProps {
+  title: string
+  value: string | number
+  subtitle?: string
+  icon: React.ElementType
+  trend?: {
+    value: number
+    isPositive: boolean
+  }
+  loading?: boolean
+  color?: 'blue' | 'green' | 'red' | 'yellow' | 'purple'
+}
+
+function AnalyticsCard({ 
+  title, 
+  value, 
+  subtitle, 
+  icon: Icon, 
+  trend, 
+  loading, 
+  color = 'blue' 
+}: AnalyticsCardProps) {
+  const colorClasses = {
+    blue: 'bg-blue-50 text-blue-600',
+    green: 'bg-green-50 text-green-600',
+    red: 'bg-red-50 text-red-600',
+    yellow: 'bg-yellow-50 text-yellow-600',
+    purple: 'bg-purple-50 text-purple-600'
+  }
+
+  return (
+    <Card className="bg-white border border-gray-200 hover:shadow-md transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="flex items-center space-x-3 mb-3">
+              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', colorClasses[color])}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">{title}</p>
+                {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 bg-gray-200 rounded animate-pulse w-24"></div>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-2xl font-bold text-gray-900">{value}</p>
+                {trend && (
+                  <div className={cn(
+                    'flex items-center text-xs font-medium',
+                    trend.isPositive ? 'text-green-600' : 'text-red-600'
+                  )}>
+                    {trend.isPositive ? (
+                      <TrendingUp className="h-3 w-3 mr-1" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3 mr-1" />
+                    )}
+                    {Math.abs(trend.value)}%
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+interface MonthlyAnalyticsTableProps {
+  monthlyData: MonthlyAnalytics[]
+  loading: boolean
+}
+
+function MonthlyAnalyticsTable({ monthlyData, loading }: MonthlyAnalyticsTableProps) {
+  const [isExpanded, setIsExpanded] = React.useState(false)
+  const displayData = isExpanded ? monthlyData : monthlyData.slice(0, 6)
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-16 bg-gray-100 rounded animate-pulse"></div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="text-left text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Month</th>
+              <th className="text-right text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Total EMI</th>
+              <th className="text-right text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Interest</th>
+              <th className="text-right text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Principal</th>
+              <th className="text-right text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Collection Rate</th>
+              <th className="text-center text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {displayData.map((month) => (
+              <tr key={month.monthKey} className="hover:bg-gray-50">
+                <td className="py-4">
+                  <div>
+                    <p className="font-semibold text-gray-900">{month.month}</p>
+                    <p className="text-xs text-gray-500">{month.emisDue + month.emisPaid} EMIs</p>
+                  </div>
+                </td>
+                <td className="py-4 text-right">
+                  <p className="font-bold text-gray-900">{formatCurrency(month.totalEMIAmount)}</p>
+                  <p className="text-xs text-gray-500">{month.emisPaid}/{month.emisDue + month.emisPaid}</p>
+                </td>
+                <td className="py-4 text-right">
+                  <p className="font-bold text-green-600">{formatCurrency(month.totalInterestAmount)}</p>
+                  <p className="text-xs text-gray-500">Pure Interest</p>
+                </td>
+                <td className="py-4 text-right">
+                  <p className="font-semibold text-gray-900">{formatCurrency(month.totalPrincipalAmount)}</p>
+                  <p className="text-xs text-gray-500">Principal Recovery</p>
+                </td>
+                <td className="py-4 text-right">
+                  <div className="flex items-center justify-end space-x-2">
+                    <div className="w-16 h-2 bg-gray-200 rounded-full">
+                      <div 
+                        className={cn(
+                          'h-2 rounded-full transition-all',
+                          month.collectionRate >= 80 ? 'bg-green-500' :
+                          month.collectionRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                        )}
+                        style={{ width: `${Math.min(month.collectionRate, 100)}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">
+                      {month.collectionRate.toFixed(1)}%
+                    </span>
+                  </div>
+                </td>
+                <td className="py-4 text-center">
+                  <Badge className={cn(
+                    month.collectionRate >= 80 ? 'bg-green-100 text-green-800' :
+                    month.collectionRate >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                  )}>
+                    {month.collectionRate >= 80 ? 'Excellent' :
+                     month.collectionRate >= 60 ? 'Good' : 'Needs Attention'}
+                  </Badge>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {monthlyData.length > 6 && (
+        <div className="text-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="h-4 w-4 mr-2" />
+                Show Less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4 mr-2" />
+                Show All {monthlyData.length} Months
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface BorrowerAnalyticsTableProps {
+  borrowersData: BorrowerAnalytics[]
+  loading: boolean
+  onViewDetails: (borrower: BorrowerAnalytics) => void
+}
+
+function BorrowerAnalyticsTable({ borrowersData, loading, onViewDetails }: BorrowerAnalyticsTableProps) {
+  const [sortField, setSortField] = React.useState<keyof BorrowerAnalytics>('total_outstanding')
+  const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('desc')
+  const [isExpanded, setIsExpanded] = React.useState(false)
+
+  const sortedData = React.useMemo(() => {
+    return [...borrowersData].sort((a, b) => {
+      const aValue = a[sortField]
+      const bValue = b[sortField]
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirection === 'desc' ? bValue - aValue : aValue - bValue
+      }
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortDirection === 'desc' 
+          ? bValue.localeCompare(aValue)
+          : aValue.localeCompare(bValue)
+      }
+      
+      return 0
+    })
+  }, [borrowersData, sortField, sortDirection])
+
+  const displayData = isExpanded ? sortedData : sortedData.slice(0, 10)
+
+  const handleSort = (field: keyof BorrowerAnalytics) => {
+    if (field === sortField) {
+      setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortField(field)
+      setSortDirection('desc')
+    }
+  }
+
+  const getRiskColor = (risk: string) => {
+    switch (risk) {
+      case 'low': return 'bg-green-100 text-green-800'
+      case 'medium': return 'bg-yellow-100 text-yellow-800'
+      case 'high': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="h-20 bg-gray-100 rounded animate-pulse"></div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="text-left text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">
+                <button
+                  onClick={() => handleSort('borrower_name')}
+                  className="flex items-center space-x-1 hover:text-gray-800"
+                >
+                  <span>Borrower</span>
+                  {sortField === 'borrower_name' && (
+                    sortDirection === 'desc' ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />
+                  )}
+                </button>
+              </th>
+              <th className="text-right text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">
+                <button
+                  onClick={() => handleSort('total_amount_borrowed')}
+                  className="flex items-center justify-end space-x-1 hover:text-gray-800 w-full"
+                >
+                  <span>Total Borrowed</span>
+                  {sortField === 'total_amount_borrowed' && (
+                    sortDirection === 'desc' ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />
+                  )}
+                </button>
+              </th>
+              <th className="text-right text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">
+                <button
+                  onClick={() => handleSort('total_interest_paid')}
+                  className="flex items-center justify-end space-x-1 hover:text-gray-800 w-full"
+                >
+                  <span>Interest Paid</span>
+                  {sortField === 'total_interest_paid' && (
+                    sortDirection === 'desc' ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />
+                  )}
+                </button>
+              </th>
+              <th className="text-right text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">
+                <button
+                  onClick={() => handleSort('total_outstanding')}
+                  className="flex items-center justify-end space-x-1 hover:text-gray-800 w-full"
+                >
+                  <span>Outstanding</span>
+                  {sortField === 'total_outstanding' && (
+                    sortDirection === 'desc' ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />
+                  )}
+                </button>
+              </th>
+              <th className="text-center text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">EMI Status</th>
+              <th className="text-center text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Risk</th>
+              <th className="text-center text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {displayData.map((borrower) => (
+              <tr key={borrower.borrower_id} className="hover:bg-gray-50">
+                <td className="py-4">
+                  <div>
+                    <p className="font-semibold text-gray-900">{borrower.borrower_name}</p>
+                    <p className="text-xs text-gray-500">{borrower.borrower_email}</p>
+                    <p className="text-xs text-gray-500">{borrower.total_loans} loan{borrower.total_loans !== 1 ? 's' : ''}</p>
+                  </div>
+                </td>
+                <td className="py-4 text-right">
+                  <p className="font-bold text-gray-900">{formatCurrency(borrower.total_amount_borrowed)}</p>
+                  <p className="text-xs text-gray-500">Since {formatDate(borrower.first_loan_date)}</p>
+                </td>
+                <td className="py-4 text-right">
+                  <p className="font-bold text-green-600">{formatCurrency(borrower.total_interest_paid)}</p>
+                  <p className="text-xs text-gray-500">
+                    Due: {formatCurrency(borrower.total_interest_due - borrower.total_interest_paid)}
+                  </p>
+                </td>
+                <td className="py-4 text-right">
+                  <p className={cn(
+                    "font-bold",
+                    borrower.total_outstanding > 0 ? "text-red-600" : "text-green-600"
+                  )}>
+                    {formatCurrency(borrower.total_outstanding)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Paid: {formatCurrency(borrower.total_principal_paid)}
+                  </p>
+                </td>
+                <td className="py-4 text-center">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-gray-900">
+                      {borrower.total_emis_paid}/{borrower.total_emis_due + borrower.total_emis_paid}
+                    </p>
+                    <div className="w-16 h-2 bg-gray-200 rounded-full mx-auto">
+                      <div 
+                        className={cn(
+                          'h-2 rounded-full',
+                          borrower.payment_consistency >= 80 ? 'bg-green-500' :
+                          borrower.payment_consistency >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                        )}
+                        style={{ 
+                          width: `${Math.min(borrower.payment_consistency, 100)}%` 
+                        }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-gray-500">{borrower.payment_consistency.toFixed(1)}%</p>
+                  </div>
+                </td>
+                <td className="py-4 text-center">
+                  <Badge className={getRiskColor(borrower.risk_level)}>
+                    {borrower.risk_level.toUpperCase()}
+                  </Badge>
+                </td>
+                <td className="py-4 text-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onViewDetails(borrower)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {borrowersData.length > 10 && (
+        <div className="text-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="h-4 w-4 mr-2" />
+                Show Top 10
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4 mr-2" />
+                Show All {borrowersData.length} Borrowers
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function LenderAnalytics() {
   const router = useRouter()
-  const { user, isAdmin, initialized, isAuthenticated } = useAuth()
-
-  console.log('📊 ANALYTICS - State:', { 
-    user: user?.email, 
-    isAdmin
+  const { user, isLender, initialized, isAuthenticated } = useAuth()
+  
+  const [analytics, setAnalytics] = React.useState<AnalyticsState>({
+    overall: {
+      totalLoanDisbursed: 0,
+      totalBorrowers: 0,
+      totalActiveLoans: 0,
+      totalCompletedLoans: 0,
+      totalOverdueLoans: 0,
+      averageLoanAmount: 0,
+      totalInterestEarned: 0,
+      totalPrincipalRecovered: 0,
+      portfolioHealth: 0
+    },
+    monthly: [],
+    borrowers: [],
+    loading: true,
+    error: null,
+    refreshing: false
   })
 
-  // Auth handling (same as other pages)
+  console.log('📊 LENDER ANALYTICS - State:', { 
+    user: user?.email, 
+    isLender, 
+    analyticsLoaded: !analytics.loading
+  })
+
+  // Auth handling
   React.useEffect(() => {
     if (!initialized) return
 
     if (!isAuthenticated) {
-      console.log('🚫 ANALYTICS - Not authenticated, redirecting to login')
+      console.log('🚫 LENDER ANALYTICS - Not authenticated, redirecting to login')
       router.replace('/login')
       return
     }
 
-    if (!isAdmin) {
-      console.log('🚫 ANALYTICS - Not admin, redirecting to dashboard')
+    if (!isLender) {
+      console.log('🚫 LENDER ANALYTICS - Not lender, redirecting to dashboard')
       router.replace('/dashboard')
       return
     }
 
-    console.log('✅ ANALYTICS - Access granted')
-  }, [initialized, isAuthenticated, isAdmin, router])
+    console.log('✅ LENDER ANALYTICS - Access granted')
+  }, [initialized, isAuthenticated, isLender, router])
 
-  // Mock data for visualization
-  const mockStats = [
-    { label: 'Total Loans', value: '1,234', icon: CreditCard, trend: '+12.5%', trendUp: true },
-    { label: 'Active Users', value: '856', icon: Users, trend: '+8.2%', trendUp: true },
-    { label: 'Portfolio Value', value: '₹45.6M', icon: DollarSign, trend: '+15.3%', trendUp: true },
-    { label: 'Collection Rate', value: '94.2%', icon: Target, trend: '-2.1%', trendUp: false },
-  ]
+  // Load analytics data
+  React.useEffect(() => {
+    if (!user || !isLender) return
+    loadAnalyticsData()
+  }, [user, isLender])
 
-  const upcomingFeatures = [
-    {
-      title: 'Loan Performance Analytics',
-      description: 'Track loan disbursement trends, repayment rates, and portfolio health metrics',
-      icon: TrendingUp,
-      category: 'Performance'
-    },
-    {
-      title: 'User Behavior Analytics',
-      description: 'Analyze user engagement, signup patterns, and platform usage statistics',
-      icon: Users,
-      category: 'User Insights'
-    },
-    {
-      title: 'Financial Dashboards',
-      description: 'Revenue tracking, profit margins, and comprehensive financial reporting',
-      icon: DollarSign,
-      category: 'Finance'
-    },
-    {
-      title: 'Risk Assessment Tools',
-      description: 'Credit risk analysis, default prediction models, and early warning systems',
-      icon: AlertCircle,
-      category: 'Risk Management'
-    },
-    {
-      title: 'Real-time Monitoring',
-      description: 'Live transaction monitoring, system health metrics, and performance alerts',
-      icon: Activity,
-      category: 'Monitoring'
-    },
-    {
-      title: 'Custom Report Builder',
-      description: 'Create custom analytics reports with drag-and-drop interface and scheduling',
-      icon: BarChart3,
-      category: 'Reporting'
+  const loadAnalyticsData = async () => {
+    if (!user) return
+
+    try {
+      console.log('📊 LENDER ANALYTICS - Loading analytics data for lender:', user.id)
+      setAnalytics(prev => ({ ...prev, loading: true, error: null }))
+
+      await Promise.all([
+        loadOverallAnalytics(),
+        loadMonthlyAnalytics(),
+        loadBorrowerAnalytics()
+      ])
+
+    } catch (error: unknown) {
+      console.error('❌ LENDER ANALYTICS - Failed to load analytics:', error)
+      setAnalytics(prev => ({ 
+        ...prev, 
+        error: error instanceof Error ? error.message : 'Failed to load analytics data' 
+      }))
+    } finally {
+      setAnalytics(prev => ({ ...prev, loading: false, refreshing: false }))
     }
-  ]
+  }
+
+  const loadOverallAnalytics = async () => {
+    if (!user) return
+
+    // Load loans data
+    const { data: loansData, error: loansError } = await supabase
+      .from('loans')
+      .select('*')
+      .eq('created_by', user.id)
+
+    if (loansError) throw loansError
+
+    if (!loansData || loansData.length === 0) {
+      setAnalytics(prev => ({
+        ...prev,
+        overall: {
+          totalLoanDisbursed: 0,
+          totalBorrowers: 0,
+          totalActiveLoans: 0,
+          totalCompletedLoans: 0,
+          totalOverdueLoans: 0,
+          averageLoanAmount: 0,
+          totalInterestEarned: 0,
+          totalPrincipalRecovered: 0,
+          portfolioHealth: 100
+        }
+      }))
+      return
+    }
+
+    // Load EMIs data
+    const loanIds = loansData.map(l => l.id)
+    const { data: emisData, error: emisError } = await supabase
+      .from('emis')
+      .select('*')
+      .in('loan_id', loanIds)
+
+    if (emisError) {
+      console.warn('⚠️ EMIs query warning:', emisError)
+    }
+
+    // Load borrowers count
+    const { data: borrowersData, error: borrowersError } = await supabase
+      .from('borrowers')
+      .select('id')
+      .eq('lender_id', user.id)
+
+    if (borrowersError) {
+      console.warn('⚠️ Borrowers query warning:', borrowersError)
+    }
+
+    // Calculate overall analytics
+    const totalLoanDisbursed = loansData.reduce((sum, loan) => sum + loan.principal_amount, 0)
+    const totalBorrowers = borrowersData?.length || 0
+    
+    let activeLoans = 0
+    let completedLoans = 0
+    let overdueLoans = 0
+    let totalInterestEarned = 0
+    let totalPrincipalRecovered = 0
+
+    const today = new Date()
+
+    loansData.forEach(loan => {
+      const loanEMIs = (emisData || []).filter(e => e.loan_id === loan.id)
+      
+      // Calculate loan status
+      const totalEMIs = loanEMIs.length
+      const paidEMIs = loanEMIs.filter(e => (e.paid_amount || 0) >= e.amount).length
+      const hasOverdueEMIs = loanEMIs.some(e => {
+        const dueDate = new Date(e.due_date)
+        const paidAmount = e.paid_amount || 0
+        return dueDate < today && paidAmount < e.amount
+      })
+
+      if (totalEMIs > 0 && paidEMIs === totalEMIs) {
+        completedLoans++
+      } else if (hasOverdueEMIs) {
+        overdueLoans++
+      } else if (loan.status === 'active') {
+        activeLoans++
+      }
+
+      // Calculate earnings
+      loanEMIs.forEach(emi => {
+        const paidAmount = emi.paid_amount || 0
+        const interestPaid = Math.min(paidAmount, emi.interest_amount || 0)
+        const principalPaid = Math.max(0, paidAmount - (emi.interest_amount || 0))
+        
+        totalInterestEarned += interestPaid
+        totalPrincipalRecovered += principalPaid
+      })
+    })
+
+    const averageLoanAmount = totalLoanDisbursed / loansData.length
+    const portfolioHealth = loansData.length > 0 
+      ? ((activeLoans + completedLoans) / loansData.length) * 100 
+      : 100
+
+    setAnalytics(prev => ({
+      ...prev,
+      overall: {
+        totalLoanDisbursed,
+        totalBorrowers,
+        totalActiveLoans: activeLoans,
+        totalCompletedLoans: completedLoans,
+        totalOverdueLoans: overdueLoans,
+        averageLoanAmount,
+        totalInterestEarned,
+        totalPrincipalRecovered,
+        portfolioHealth
+      }
+    }))
+  }
+
+  const loadMonthlyAnalytics = async () => {
+    if (!user) return
+
+    // Get loans
+    const { data: loansData, error: loansError } = await supabase
+      .from('loans')
+      .select('id')
+      .eq('created_by', user.id)
+
+    if (loansError) throw loansError
+
+    if (!loansData || loansData.length === 0) {
+      setAnalytics(prev => ({ ...prev, monthly: [] }))
+      return
+    }
+
+    const loanIds = loansData.map(l => l.id)
+
+    // Get EMIs
+    const { data: emisData, error: emisError } = await supabase
+      .from('emis')
+      .select('*')
+      .in('loan_id', loanIds)
+      .order('due_date', { ascending: false })
+
+    if (emisError) throw emisError
+
+    if (!emisData || emisData.length === 0) {
+      setAnalytics(prev => ({ ...prev, monthly: [] }))
+      return
+    }
+
+    // Group EMIs by month
+    const monthlyMap = new Map<string, {
+      month: string
+      monthKey: string
+      emis: any[]
+    }>()
+
+    emisData.forEach(emi => {
+      const dueDate = new Date(emi.due_date)
+      const monthKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`
+      const monthLabel = dueDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long' 
+      })
+
+      if (!monthlyMap.has(monthKey)) {
+        monthlyMap.set(monthKey, {
+          month: monthLabel,
+          monthKey,
+          emis: []
+        })
+      }
+
+      monthlyMap.get(monthKey)!.emis.push(emi)
+    })
+
+    // Calculate monthly analytics
+    const monthlyAnalytics: MonthlyAnalytics[] = Array.from(monthlyMap.values()).map(monthData => {
+      const emis = monthData.emis
+      let totalEMIAmount = 0
+      let totalInterestAmount = 0
+      let totalPrincipalAmount = 0
+      let emisDue = 0
+      let emisPaid = 0
+
+      emis.forEach(emi => {
+        const paidAmount = emi.paid_amount || 0
+        const isPaid = paidAmount >= emi.amount
+
+        totalEMIAmount += emi.amount
+        totalInterestAmount += emi.interest_amount || 0
+        totalPrincipalAmount += emi.principal_amount || 0
+
+        if (isPaid) {
+          emisPaid++
+        } else {
+          emisDue++
+        }
+      })
+
+      const collectionRate = emis.length > 0 ? (emisPaid / emis.length) * 100 : 0
+
+      return {
+        month: monthData.month,
+        monthKey: monthData.monthKey,
+        totalEMIAmount,
+        totalInterestAmount,
+        totalPrincipalAmount,
+        emisDue,
+        emisPaid,
+        collectionRate
+      }
+    })
+
+    // Sort by month (most recent first)
+    monthlyAnalytics.sort((a, b) => b.monthKey.localeCompare(a.monthKey))
+
+    setAnalytics(prev => ({ ...prev, monthly: monthlyAnalytics }))
+  }
+
+  const loadBorrowerAnalytics = async () => {
+    if (!user) return
+
+    // Get borrowers
+    const { data: borrowersData, error: borrowersError } = await supabase
+      .from('borrowers')
+      .select('id, user_id')
+      .eq('lender_id', user.id)
+
+    if (borrowersError) throw borrowersError
+
+    if (!borrowersData || borrowersData.length === 0) {
+      setAnalytics(prev => ({ ...prev, borrowers: [] }))
+      return
+    }
+
+    // Get borrower details
+    const borrowerUserIds = borrowersData.map(b => b.user_id)
+    const { data: usersData, error: usersError } = await supabase
+      .from('users')
+      .select('id, full_name, email')
+      .in('id', borrowerUserIds)
+
+    if (usersError) throw usersError
+
+    // Get loans for each borrower
+    const { data: loansData, error: loansError } = await supabase
+      .from('loans')
+      .select('*')
+      .eq('created_by', user.id)
+      .in('borrower_id', borrowerUserIds)
+
+    if (loansError) throw loansError
+
+    // Get all EMIs
+    const loanIds = (loansData || []).map(l => l.id)
+    const { data: emisData, error: emisError } = await supabase
+      .from('emis')
+      .select('*')
+      .in('loan_id', loanIds)
+
+    if (emisError) {
+      console.warn('⚠️ EMIs query warning:', emisError)
+    }
+
+    // Calculate borrower analytics
+    const borrowerAnalytics: BorrowerAnalytics[] = borrowersData.map(borrower => {
+      const user = usersData?.find(u => u.id === borrower.user_id)
+      const borrowerLoans = (loansData || []).filter(l => l.borrower_id === borrower.user_id)
+      const borrowerEMIs = (emisData || []).filter(e => 
+        borrowerLoans.some(l => l.id === e.loan_id)
+      )
+
+      // Calculate totals
+      const totalAmountBorrowed = borrowerLoans.reduce((sum, loan) => sum + loan.principal_amount, 0)
+      const totalEMIsDue = borrowerEMIs.filter(e => (e.paid_amount || 0) < e.amount).length
+      const totalEMIsPaid = borrowerEMIs.filter(e => (e.paid_amount || 0) >= e.amount).length
+
+      let totalInterestDue = 0
+      let totalInterestPaid = 0
+      let totalPrincipalDue = 0
+      let totalPrincipalPaid = 0
+
+      borrowerEMIs.forEach(emi => {
+        const paidAmount = emi.paid_amount || 0
+        const interestAmount = emi.interest_amount || 0
+        const principalAmount = emi.principal_amount || 0
+
+        totalInterestDue += interestAmount
+        totalPrincipalDue += principalAmount
+
+        if (paidAmount > 0) {
+          const interestPaid = Math.min(paidAmount, interestAmount)
+          const principalPaid = Math.max(0, paidAmount - interestAmount)
+          
+          totalInterestPaid += interestPaid
+          totalPrincipalPaid += principalPaid
+        }
+      })
+
+      const totalOutstanding = totalPrincipalDue - totalPrincipalPaid
+      const paymentConsistency = borrowerEMIs.length > 0 
+        ? (totalEMIsPaid / borrowerEMIs.length) * 100 
+        : 100
+
+      // Calculate risk level
+      let riskLevel: 'low' | 'medium' | 'high' = 'low'
+      if (paymentConsistency < 60 || totalEMIsDue > 3) {
+        riskLevel = 'high'
+      } else if (paymentConsistency < 80 || totalEMIsDue > 1) {
+        riskLevel = 'medium'
+      }
+
+      const firstLoanDate = borrowerLoans.length > 0 
+        ? borrowerLoans.reduce((earliest, loan) => 
+            loan.created_at < earliest ? loan.created_at : earliest, 
+            borrowerLoans[0].created_at
+          )
+        : new Date().toISOString()
+
+      const lastPaymentDate = borrowerEMIs
+        .filter(e => e.paid_date)
+        .reduce((latest: string | null, emi) => {
+          if (!latest || (emi.paid_date && emi.paid_date > latest)) {
+            return emi.paid_date
+          }
+          return latest
+        }, null)
+
+      return {
+        borrower_id: borrower.user_id,
+        borrower_name: user?.full_name || 'Unknown',
+        borrower_email: user?.email || '',
+        total_loans: borrowerLoans.length,
+        total_amount_borrowed: totalAmountBorrowed,
+        total_emis_due: totalEMIsDue,
+        total_emis_paid: totalEMIsPaid,
+        total_interest_due: totalInterestDue,
+        total_interest_paid: totalInterestPaid,
+        total_principal_due: totalPrincipalDue,
+        total_principal_paid: totalPrincipalPaid,
+        total_outstanding: totalOutstanding,
+        first_loan_date: firstLoanDate,
+        last_payment_date: lastPaymentDate,
+        payment_consistency: paymentConsistency,
+        risk_level: riskLevel
+      }
+    })
+
+    // Sort by total outstanding (highest first)
+    borrowerAnalytics.sort((a, b) => b.total_outstanding - a.total_outstanding)
+
+    setAnalytics(prev => ({ ...prev, borrowers: borrowerAnalytics }))
+  }
+
+  const handleRefresh = async () => {
+    setAnalytics(prev => ({ ...prev, refreshing: true }))
+    try {
+      await loadAnalyticsData()
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(50)
+      }
+    } finally {
+      setTimeout(() => {
+        setAnalytics(prev => ({ ...prev, refreshing: false }))
+      }, 500)
+    }
+  }
+
+  const handleViewBorrowerDetails = (borrower: BorrowerAnalytics) => {
+    console.log('📊 View borrower details:', borrower.borrower_name)
+    // Navigate to borrower details or show modal
+    router.push(`/dashboard/lender/borrowers?borrower=${borrower.borrower_id}`)
+  }
+
+  const handleExportData = () => {
+    console.log('📊 Export analytics data')
+    // Implement export functionality
+  }
 
   // Loading state
   if (!initialized) {
@@ -115,13 +945,13 @@ export default function AdminAnalytics() {
   }
 
   // Not authenticated state
-  if (!isAuthenticated || !isAdmin) {
+  if (!isAuthenticated || !isLender) {
     return (
       <DashboardLayout>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <BarChart3 className="h-12 w-12 text-red-600 mx-auto mb-4" />
-            <h2 className="text-lg font-semibold text-gray-900">Admin Access Required</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Lender Access Required</h2>
             <p className="text-sm text-gray-600">Redirecting...</p>
           </div>
         </div>
@@ -136,178 +966,156 @@ export default function AdminAnalytics() {
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
-              <p className="mt-2 text-sm text-gray-600">
-                Comprehensive analytics and insights for platform performance
+              <h1 className="text-2xl font-bold text-gray-900">Lender Analytics</h1>
+              <p className="text-sm text-gray-600 mt-2">
+                Comprehensive insights into your lending portfolio and performance
               </p>
             </div>
-            <div className="flex space-x-3">
-              <Badge variant="outline" className="font-medium">
-                <Clock className="h-3 w-3 mr-1" />
-                Coming Soon
-              </Badge>
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+              <Button
+                variant="outline"
+                onClick={handleRefresh}
+                disabled={analytics.loading || analytics.refreshing}
+                size="sm"
+                className="font-medium"
+              >
+                <RefreshCw className={cn(
+                  "h-4 w-4 mr-2", 
+                  (analytics.loading || analytics.refreshing) && "animate-spin"
+                )} />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleExportData}
+                size="sm"
+                className="font-medium"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
             </div>
           </div>
         </div>
 
-        {/* Mock Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {mockStats.map((stat, index) => {
-            const Icon = stat.icon
-            return (
-              <Card key={index} className="relative overflow-hidden">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                      <p className="text-2xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                      <div className="flex items-center mt-2">
-                        {stat.trendUp ? (
-                          <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4 text-red-600 mr-1" />
-                        )}
-                        <span className={`text-sm font-medium ${
-                          stat.trendUp ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {stat.trend}
-                        </span>
-                        <span className="text-sm text-gray-500 ml-1">vs last month</span>
-                      </div>
-                    </div>
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center opacity-20">
-                      <Icon className="h-6 w-6 text-white" />
-                    </div>
-                  </div>
-                  {/* Overlay for disabled state */}
-                  <div className="absolute inset-0 bg-white bg-opacity-60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                    <Badge variant="secondary" className="font-medium">
-                      Preview Mode
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-
-        {/* Coming Soon Section */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mb-6">
-            <BarChart3 className="h-10 w-10 text-white" />
-          </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Advanced Analytics Coming Soon
-          </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            We're building powerful analytics tools to help you make data-driven decisions. 
-            Get ready for comprehensive insights into your lending platform's performance.
-          </p>
-        </div>
-
-        {/* Upcoming Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          {upcomingFeatures.map((feature, index) => {
-            const Icon = feature.icon
-            return (
-              <Card key={index} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                      <Icon className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{feature.title}</CardTitle>
-                      <Badge variant="outline" className="text-xs mt-1">
-                        {feature.category}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600">{feature.description}</p>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-
-        {/* Mock Chart Placeholders */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <LineChart className="h-5 w-5" />
-                <span>Loan Disbursement Trends</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex items-center justify-center relative overflow-hidden">
-                <div className="text-center z-10">
-                  <LineChart className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500 font-medium">Chart Preview</p>
-                  <p className="text-sm text-gray-400">Interactive charts coming soon</p>
-                </div>
-                {/* Mock chart lines */}
-                <div className="absolute inset-0 opacity-10">
-                  <svg className="w-full h-full" viewBox="0 0 400 200">
-                    <path d="M 50 150 Q 100 100 150 120 T 250 80 T 350 100" stroke="#3B82F6" strokeWidth="3" fill="none" />
-                    <path d="M 50 120 Q 100 80 150 90 T 250 60 T 350 70" stroke="#10B981" strokeWidth="3" fill="none" />
-                  </svg>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <PieChart className="h-5 w-5" />
-                <span>Portfolio Distribution</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex items-center justify-center relative overflow-hidden">
-                <div className="text-center z-10">
-                  <PieChart className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500 font-medium">Chart Preview</p>
-                  <p className="text-sm text-gray-400">Interactive charts coming soon</p>
-                </div>
-                {/* Mock pie chart */}
-                <div className="absolute inset-0 opacity-10 flex items-center justify-center">
-                  <div className="w-32 h-32 rounded-full border-8 border-blue-500 border-t-green-500 border-r-purple-500 border-b-yellow-500"></div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Call to Action */}
-        <Card className="bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200">
-          <CardContent className="p-8 text-center">
-            <div className="flex items-center justify-center mb-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center">
-                <Zap className="h-8 w-8 text-white" />
+        {/* Error Display */}
+        {analytics.error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <div>
+                <h4 className="text-sm font-semibold text-red-900">Error Loading Analytics</h4>
+                <p className="text-sm text-red-800 mt-1">{analytics.error}</p>
               </div>
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-3">
-              Stay Tuned for Powerful Analytics
-            </h3>
-            <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-              Our analytics dashboard will provide real-time insights, custom reports, and 
-              predictive analytics to help you optimize your lending operations and make 
-              informed business decisions.
+          </div>
+        )}
+
+        {/* Overall Analytics Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <AnalyticsCard
+            title="Total Loan Disbursed"
+            value={formatCurrency(analytics.overall.totalLoanDisbursed)}
+            subtitle="Principal amount lent"
+            icon={DollarSign}
+            loading={analytics.loading}
+            color="blue"
+          />
+          <AnalyticsCard
+            title="Total Borrowers"
+            value={analytics.overall.totalBorrowers}
+            subtitle="Active relationships"
+            icon={Users}
+            loading={analytics.loading}
+            color="green"
+          />
+          <AnalyticsCard
+            title="Active Loans"
+            value={analytics.overall.totalActiveLoans}
+            subtitle={`${analytics.overall.totalCompletedLoans} completed`}
+            icon={CreditCard}
+            loading={analytics.loading}
+            color="purple"
+          />
+          <AnalyticsCard
+            title="Portfolio Health"
+            value={`${analytics.overall.portfolioHealth.toFixed(1)}%`}
+            subtitle={`${analytics.overall.totalOverdueLoans} overdue`}
+            icon={Target}
+            loading={analytics.loading}
+            color={analytics.overall.portfolioHealth >= 80 ? 'green' : 
+                   analytics.overall.portfolioHealth >= 60 ? 'yellow' : 'red'}
+          />
+          <AnalyticsCard
+            title="Interest Earned"
+            value={formatCurrency(analytics.overall.totalInterestEarned)}
+            subtitle="Pure interest collected"
+            icon={TrendingUp}
+            loading={analytics.loading}
+            color="green"
+          />
+          <AnalyticsCard
+            title="Principal Recovered"
+            value={formatCurrency(analytics.overall.totalPrincipalRecovered)}
+            subtitle="Capital returned"
+            icon={Percent}
+            loading={analytics.loading}
+            color="blue"
+          />
+          <AnalyticsCard
+            title="Average Loan Size"
+            value={formatCurrency(analytics.overall.averageLoanAmount)}
+            subtitle="Per loan disbursed"
+            icon={BarChart3}
+            loading={analytics.loading}
+            color="purple"
+          />
+          <AnalyticsCard
+            title="Active Collection"
+            value={`${analytics.overall.totalActiveLoans}/${analytics.overall.totalActiveLoans + analytics.overall.totalOverdueLoans}`}
+            subtitle="Performing loans"
+            icon={CheckCircle}
+            loading={analytics.loading}
+            color="green"
+          />
+        </div>
+
+        {/* Monthly Analytics */}
+        <Card className="bg-white border border-gray-200 mb-8 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-blue-600" />
+              <span>Monthly Performance</span>
+            </CardTitle>
+            <p className="text-sm text-gray-600">
+              EMI collections and interest earnings by month
             </p>
-            <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-              <Button variant="outline" className="font-medium">
-                <Calendar className="h-4 w-4 mr-2" />
-                Get Notified
-              </Button>
-              <Button variant="outline" className="font-medium">
-                <Activity className="h-4 w-4 mr-2" />
-                Request Features
-              </Button>
-            </div>
+          </CardHeader>
+          <CardContent>
+            <MonthlyAnalyticsTable 
+              monthlyData={analytics.monthly} 
+              loading={analytics.loading} 
+            />
+          </CardContent>
+        </Card>
+
+        {/* Borrower Analytics */}
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-green-600" />
+              <span>Borrower Performance</span>
+            </CardTitle>
+            <p className="text-sm text-gray-600">
+              Individual borrower analytics and payment history
+            </p>
+          </CardHeader>
+          <CardContent>
+            <BorrowerAnalyticsTable 
+              borrowersData={analytics.borrowers}
+              loading={analytics.loading}
+              onViewDetails={handleViewBorrowerDetails}
+            />
           </CardContent>
         </Card>
       </div>

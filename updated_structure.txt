@@ -15,7 +15,18 @@ src
 │   │   └── lender
 │   ├── dashboard
 │   │   ├── admin
+│   │   │   ├── analytics
+│   │   │   │   └── page.tsx
+│   │   │   ├── emis
+│   │   │   │   └── page.tsx
+│   │   │   ├── loans
+│   │   │   │   ├── [id]
+│   │   │   │   │   └── schedule
+│   │   │   │   │       └── page.tsx
+│   │   │   │   └── page.tsx
 │   │   │   ├── page.tsx
+│   │   │   ├── settings
+│   │   │   │   └── page.tsx
 │   │   │   └── users
 │   │   │       └── page.tsx
 │   │   ├── borrower
@@ -30,7 +41,11 @@ src
 │   │   ├── lender
 │   │   │   ├── actions
 │   │   │   │   └── page.tsx
+│   │   │   ├── analytics
+│   │   │   │   └── page.tsx
 │   │   │   ├── borrowers
+│   │   │   │   └── page.tsx
+│   │   │   ├── emis
 │   │   │   │   └── page.tsx
 │   │   │   ├── loans
 │   │   │   │   └── page.tsx
@@ -57,7 +72,6 @@ src
 │   ├── common
 │   ├── features
 │   │   ├── admin
-│   │   │   ├── platform-stats.tsx
 │   │   │   ├── quick-actions.tsx
 │   │   │   └── user-management.tsx
 │   │   ├── analytics
@@ -90,15 +104,11 @@ src
 │       ├── loading.tsx
 │       ├── select.tsx
 │       ├── stats-card.tsx
-│       └── toast.tsx
+│       ├── switch.tsx
+│       ├── toast.tsx
+│       └── unified-loan-card.tsx
 ├── lib
 │   ├── api
-│   │   ├── admin
-│   │   │   ├── dashboard.ts
-│   │   │   ├── emis.ts
-│   │   │   ├── index.ts
-│   │   │   ├── loans.ts
-│   │   │   └── users.ts
 │   │   ├── analytics
 │   │   ├── loans
 │   │   ├── types.ts
@@ -108,7 +118,7 @@ src
 │   ├── constants
 │   │   ├── app-config.ts
 │   │   └── routes.ts
-│   ├── hooks
+│   ├── loan-utils.ts
 │   ├── stores
 │   ├── supabase.ts
 │   ├── types

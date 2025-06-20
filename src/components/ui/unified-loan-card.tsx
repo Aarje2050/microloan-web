@@ -219,7 +219,6 @@ export function UnifiedLoanCard({
               isCompleted && "opacity-50 cursor-not-allowed"
             )}
           >
-            <Receipt className="w-4 h-4 mr-2" />
             {isCompleted ? "Fully Paid" : "Record Payment"}
           </Button>
         </div>
