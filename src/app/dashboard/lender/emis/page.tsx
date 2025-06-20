@@ -690,10 +690,35 @@ const getEMIsByMonth = React.useMemo(() => {
     }
   })
   
-  // Sort by month (newest first)
-  return Array.from(monthlyDistribution.values()).sort((a, b) => {
-    return b.key.localeCompare(a.key)
-  })
+  // Sort by month - Current month first, then future months chronologically
+return Array.from(monthlyDistribution.values()).sort((a, b) => {
+  const today = new Date()
+  const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+  
+  const aDate = new Date(a.key + '-01')
+  const bDate = new Date(b.key + '-01')
+  const currentDate = new Date(currentMonthKey + '-01')
+  
+  // Current month always comes first
+  if (a.key === currentMonthKey) return -1
+  if (b.key === currentMonthKey) return 1
+  
+  // Both are future months - sort chronologically (ascending)
+  if (aDate >= currentDate && bDate >= currentDate) {
+    return aDate.getTime() - bDate.getTime()
+  }
+  
+  // Both are past months - sort reverse chronologically (most recent first)
+  if (aDate < currentDate && bDate < currentDate) {
+    return bDate.getTime() - aDate.getTime()
+  }
+  
+  // One future, one past - future comes first
+  if (aDate >= currentDate && bDate < currentDate) return -1
+  if (bDate >= currentDate && aDate < currentDate) return 1
+  
+  return 0
+})
 }, [emis])
 
   const calculatePriority = (emi: any, status: string): 'high' | 'medium' | 'low' => {
