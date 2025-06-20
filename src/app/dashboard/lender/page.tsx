@@ -54,6 +54,7 @@ interface DashboardStats {
   activeLoans: number;
   dueEmis: number;
   currentMonthEarnings: number; // EMIs due in current month
+  totalLoanDisbursed: number; // Total loan disbursed
 }
 
 type ViewMode = "dashboard" | "add-borrower" | "create-loan" | "record-payment";
@@ -620,6 +621,8 @@ export default function LenderDashboard() {
     activeLoans: 0,
     dueEmis: 0,
     currentMonthEarnings: 0, // EMIs due in current month
+    totalLoanDisbursed: 0// Total loan disbursed
+
   });
   const [loading, setLoading] = React.useState({
     borrowers: true,
@@ -909,6 +912,8 @@ export default function LenderDashboard() {
       }
 
       let totalDueEmis = 0;
+      let totalLoanDisbursed = 0; // Initialize total loan disbursed
+
       const transformedLoans: LoanSummary[] = loansData.map((loan) => {
         const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
         const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
@@ -974,6 +979,9 @@ export default function LenderDashboard() {
           emis: loanEMIs // Include EMI data for status calculation
         };
 
+        // Add principal amount to total loan disbursed
+      totalLoanDisbursed += loan.principal_amount;
+
         // Calculate smart status
         const smartStatus = calculateLoanStatus(loanData);
 
@@ -991,7 +999,9 @@ export default function LenderDashboard() {
       updateStats({ 
         loans: transformedLoans.length, 
         dueEmis: totalDueEmis, 
-        currentMonthEarnings: currentMonthEarnings
+        currentMonthEarnings: currentMonthEarnings,
+        totalLoanDisbursed: totalLoanDisbursed // Update stats with total loan disbursed
+
       });
 
     } catch (error: unknown) {
@@ -1008,12 +1018,14 @@ export default function LenderDashboard() {
     loans: number;
     dueEmis: number;
     currentMonthEarnings: number;
+    totalLoanDisbursed: number; // Include totalLoanDisbursed
   }>) => {
     setStats(prev => ({
       totalBorrowers: updates.borrowers ?? prev.totalBorrowers,
       activeLoans: updates.loans ?? prev.activeLoans,
       dueEmis: updates.dueEmis ?? prev.dueEmis,
       currentMonthEarnings: updates.currentMonthEarnings ?? prev.currentMonthEarnings,
+      totalLoanDisbursed: updates.totalLoanDisbursed ?? prev.totalLoanDisbursed, // Include totalLoanDisbursed
     }));
   };
 
@@ -1220,39 +1232,46 @@ export default function LenderDashboard() {
 
         <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
-            <StatsCard
-              title="Total Borrowers"
-              value={stats.totalBorrowers}
-              icon={Users}
-              loading={loading.borrowers}
-              onClick={handleNavigateToBorrowers}
-              subtitle="Manage contacts"
-            />
-            <StatsCard
-              title="Active Loans"
-              value={stats.activeLoans}
-              icon={CreditCard}
-              loading={loading.loans}
-              onClick={handleNavigateToLoans}
-              subtitle="Portfolio overview"
-            />
-            <StatsCard
-              title="Due EMIs"
-              value={stats.dueEmis}
-              icon={Calendar}
-              loading={loading.stats}
-              onClick={handleNavigateToEMIs}
-              subtitle="Require attention"
-            />
-            <StatsCard
-              title="This Month Earnings"
-              value={formatCurrency(stats.currentMonthEarnings)}
-              icon={TrendingUp}
-              loading={loading.stats}
-              subtitle={`EMIs due in ${new Date().toLocaleDateString('en-US', { month: 'long' })}`}
-            />
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+  <StatsCard
+    title="Total Borrowers"
+    value={stats.totalBorrowers}
+    icon={Users}
+    loading={loading.borrowers}
+    onClick={handleNavigateToBorrowers}
+    subtitle="Manage contacts"
+  />
+  <StatsCard
+    title="Active Loans"
+    value={stats.activeLoans}
+    icon={CreditCard}
+    loading={loading.loans}
+    onClick={handleNavigateToLoans}
+    subtitle="Portfolio overview"
+  />
+  <StatsCard
+    title="Due EMIs"
+    value={stats.dueEmis}
+    icon={Calendar}
+    loading={loading.stats}
+    onClick={handleNavigateToEMIs}
+    subtitle="Require attention"
+  />
+  <StatsCard
+    title="This Month Earnings"
+    value={formatCurrency(stats.currentMonthEarnings)}
+    icon={TrendingUp}
+    loading={loading.stats}
+    subtitle={`EMIs due in ${new Date().toLocaleDateString('en-US', { month: 'long' })}`}
+  />
+  <StatsCard
+    title="Total Loan Disbursed"
+    value={formatCurrency(stats.totalLoanDisbursed)}
+    icon={DollarSign}
+    loading={loading.stats}
+    subtitle="Total principal amount disbursed"
+  />
+</div>
 
           {/* Quick Actions */}
           <Card className="bg-white border border-gray-200">
