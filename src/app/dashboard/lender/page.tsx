@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import DashboardLayout from "@/components/layout/dashboard-layout";
+import { useSearchParams } from 'next/navigation';
+
+
 import {
   Users,
   CreditCard,
@@ -580,6 +583,8 @@ export default function LenderDashboard() {
   const { user, isLender, initialized, isAuthenticated } = useAuth();
 
   // State management
+  const searchParams = useSearchParams();
+
   const [viewMode, setViewMode] = React.useState<ViewMode>("dashboard");
   const [selectedBorrowerForLoan, setSelectedBorrowerForLoan] = React.useState<string>("");
   const [selectedLoanForPayment, setSelectedLoanForPayment] = React.useState<string>("");
@@ -632,11 +637,48 @@ export default function LenderDashboard() {
     console.log("✅ LENDER - Access granted");
   }, [initialized, isAuthenticated, isLender, router]);
 
+  // Handle URL parameters for deep linking to forms
+React.useEffect(() => {
+  if (!initialized || !isAuthenticated || !isLender) return;
+
+  const mode = searchParams.get('mode');
+  const loanId = searchParams.get('loan');
+  const borrowerId = searchParams.get('borrower');
+
+  console.log("📋 DASHBOARD - URL params:", { mode, loanId, borrowerId });
+
+  if (mode && mode !== viewMode) {
+    switch (mode) {
+      case 'record-payment':
+        if (loanId) {
+          setSelectedLoanForPayment(loanId);
+          setViewMode("record-payment");
+        }
+        break;
+      case 'create-loan':
+        if (borrowerId) {
+          setSelectedBorrowerForLoan(borrowerId);
+        }
+        setViewMode("create-loan");
+        break;
+      case 'add-borrower':
+        setViewMode("add-borrower");
+        break;
+      default:
+        console.log("⚠️ Unknown mode:", mode);
+    }
+  }
+}, [initialized, isAuthenticated, isLender, searchParams, viewMode]);
   // Load dashboard data
   React.useEffect(() => {
     if (!user || !isLender) return;
     loadDashboardData();
   }, [user, isLender]);
+
+  const clearUrlParams = () => {
+    // Clear URL parameters after processing them
+    router.replace('/dashboard/lender', undefined);
+  };
 
   const loadDashboardData = async () => {
     if (!user) return;
@@ -884,23 +926,27 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
     router.push('/dashboard/lender/emis');
   };
 
-  // Success handlers
-  const handleAddBorrowerSuccess = () => {
-    setViewMode("dashboard");
-    loadDashboardData();
-  };
+ // Replace these success handler functions in the dashboard component
 
-  const handleCreateLoanSuccess = (loanId: string) => {
-    setViewMode("dashboard");
-    setSelectedBorrowerForLoan("");
-    loadDashboardData();
-  };
+const handleAddBorrowerSuccess = () => {
+  setViewMode("dashboard");
+  router.replace('/dashboard/lender'); // Clear URL params
+  loadDashboardData();
+};
 
-  const handleRecordPaymentSuccess = (paymentId: string) => {
-    setViewMode("dashboard");
-    setSelectedLoanForPayment("");
-    loadDashboardData();
-  };
+const handleCreateLoanSuccess = (loanId: string) => {
+  setViewMode("dashboard");
+  setSelectedBorrowerForLoan("");
+  router.replace('/dashboard/lender'); // Clear URL params
+  loadDashboardData();
+};
+
+const handleRecordPaymentSuccess = (paymentId: string) => {
+  setViewMode("dashboard");
+  setSelectedLoanForPayment("");
+  router.replace('/dashboard/lender'); // Clear URL params
+  loadDashboardData();
+};
 
   // Modal handlers
   const handleViewLoanDetails = (loan: LoanSummary) => {
@@ -959,18 +1005,25 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
       <DashboardLayout>
         <div className="max-w-2xl mx-auto p-6">
           <div className="mb-6">
-            <Button
-              variant="outline"
-              onClick={() => setViewMode("dashboard")}
-              size="sm"
-            >
-              ← Back to Dashboard
-            </Button>
+          <Button
+  variant="outline"
+  onClick={() => {
+    setViewMode("dashboard");
+    router.replace('/dashboard/lender'); // Clear URL params
+  }}
+  size="sm"
+>
+  ← Back to Dashboard
+</Button>
           </div>
-          <AddBorrowerForm
-            onSuccess={handleAddBorrowerSuccess}
-            onCancel={() => setViewMode("dashboard")}
-          />
+          
+<AddBorrowerForm
+  onSuccess={handleAddBorrowerSuccess}
+  onCancel={() => {
+    setViewMode("dashboard");
+    router.replace('/dashboard/lender'); // Clear URL params
+  }}
+/>
         </div>
       </DashboardLayout>
     );
@@ -981,22 +1034,27 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
       <DashboardLayout>
         <div className="max-w-4xl mx-auto p-6">
           <div className="mb-6">
-            <Button
-              variant="outline"
-              onClick={() => setViewMode("dashboard")}
-              size="sm"
-            >
-              ← Back to Dashboard
-            </Button>
+          <Button
+  variant="outline"
+  onClick={() => {
+    setViewMode("dashboard");
+    setSelectedBorrowerForLoan("");
+    router.replace('/dashboard/lender'); // Clear URL params
+  }}
+  size="sm"
+>
+  ← Back to Dashboard
+</Button>
           </div>
           <CreateLoanForm
-            borrowerId={selectedBorrowerForLoan}
-            onSuccess={handleCreateLoanSuccess}
-            onCancel={() => {
-              setViewMode("dashboard");
-              setSelectedBorrowerForLoan("");
-            }}
-          />
+  borrowerId={selectedBorrowerForLoan}
+  onSuccess={handleCreateLoanSuccess}
+  onCancel={() => {
+    setViewMode("dashboard");
+    setSelectedBorrowerForLoan("");
+    router.replace('/dashboard/lender'); // Clear URL params
+  }}
+/>
         </div>
       </DashboardLayout>
     );
@@ -1007,22 +1065,27 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
       <DashboardLayout>
         <div className="max-w-3xl mx-auto p-6">
           <div className="mb-6">
-            <Button
-              variant="outline"
-              onClick={() => setViewMode("dashboard")}
-              size="sm"
-            >
-              ← Back to Dashboard
-            </Button>
+          <Button
+  variant="outline"
+  onClick={() => {
+    setViewMode("dashboard");
+    setSelectedLoanForPayment("");
+    router.replace('/dashboard/lender'); // Clear URL params
+  }}
+  size="sm"
+>
+  ← Back to Dashboard
+</Button>
           </div>
           <RecordPaymentForm
-            loanId={selectedLoanForPayment}
-            onSuccess={handleRecordPaymentSuccess}
-            onCancel={() => {
-              setViewMode("dashboard");
-              setSelectedLoanForPayment("");
-            }}
-          />
+  loanId={selectedLoanForPayment}
+  onSuccess={handleRecordPaymentSuccess}
+  onCancel={() => {
+    setViewMode("dashboard");
+    setSelectedLoanForPayment("");
+    router.replace('/dashboard/lender'); // Clear URL params
+  }}
+/>
         </div>
       </DashboardLayout>
     );

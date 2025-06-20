@@ -824,7 +824,7 @@ export default function LenderEMIManagement() {
           paid_amount: emi.amount,
           paid_date: new Date().toISOString().split('T')[0],
           status: 'paid',
-          payment_status: 'completed',
+          payment_status: 'paid',
           updated_at: new Date().toISOString()
         })
         .eq('id', emi.id)

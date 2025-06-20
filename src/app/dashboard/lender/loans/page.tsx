@@ -12,7 +12,11 @@ import {
   CreditCard,
   Plus,
   RefreshCw,
-  Download
+  Download,
+  Receipt,
+  Calendar,
+  User,
+  IndianRupee
 } from "lucide-react";
 
 import { LoanSummary, calculateLoanStatus } from '@/lib/loan-utils';
@@ -32,9 +36,236 @@ import { Badge } from "@/components/ui/badge";
 type FilterStatus = 'all' | 'active' | 'disbursed' | 'completed' | 'overdue';
 type SortOption = 'newest' | 'oldest' | 'amount-high' | 'amount-low' | 'status';
 
+interface LoanDetailsModalProps {
+  loan: LoanSummary | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onRecordPayment: (loanId: string) => void;
+  formatCurrency: (amount: number) => string;
+  formatDate: (dateString: string) => string;
+}
+
+function LoanDetailsModal({ 
+  loan, 
+  isOpen, 
+  onClose, 
+  onRecordPayment, 
+  formatCurrency, 
+  formatDate 
+}: LoanDetailsModalProps) {
+  if (!isOpen || !loan) return null;
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active': return 'bg-green-100 text-green-800 border-green-200';
+      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'overdue': return 'bg-red-100 text-red-800 border-red-200';
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const progressPercentage = loan.total_emis > 0 ? (loan.paid_emis / loan.total_emis) * 100 : 0;
+  const isCompleted = loan.pending_emis === 0;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+        {/* Header */}
+        <div className="border-b border-gray-200 px-4 sm:px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">{loan.loan_number}</h3>
+              <p className="text-sm text-gray-500 mt-1">Loan Details & Progress</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="h-5 w-5 text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 sm:p-6 space-y-6">
+          {/* Status and Basic Info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</label>
+              <div className="mt-2">
+                <Badge className={getStatusColor(loan.status)}>
+                  {loan.status.toUpperCase()}
+                </Badge>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</label>
+              <p className="text-lg font-semibold text-gray-900 mt-2">
+                {Math.round(progressPercentage)}% Complete
+              </p>
+            </div>
+          </div>
+
+          {/* Financial Details */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-4">Financial Overview</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <IndianRupee className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Principal</span>
+                </div>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(loan.principal_amount)}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <TrendingUp className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</span>
+                </div>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(loan.total_amount)}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <TrendingDown className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</span>
+                </div>
+                <p className={`text-xl font-bold ${loan.outstanding_balance > 0 ? "text-red-600" : "text-green-600"}`}>
+                  {formatCurrency(loan.outstanding_balance)}
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Disbursed</span>
+                </div>
+                <p className="text-lg font-bold text-gray-900">{formatDate(loan.disbursement_date)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Purpose & Notes */}
+          {(loan.purpose || loan.notes) && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-4">Loan Information</h4>
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                {loan.purpose && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Purpose</p>
+                    <p className="text-sm text-gray-700">{loan.purpose}</p>
+                  </div>
+                )}
+                {loan.notes && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Notes</p>
+                    <p className="text-sm text-gray-700">{loan.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* EMI Progress */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-4">EMI Progress</h4>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <div className="flex justify-between text-sm mb-3">
+                <span className="text-gray-600">Progress</span>
+                <span className="font-medium text-gray-900">
+                  {loan.paid_emis}/{loan.total_emis} EMIs ({Math.round(progressPercentage)}%)
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-3">
+                <div 
+                  className="bg-blue-600 h-3 rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercentage}%` }}
+                ></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 mb-1">Paid EMIs</p>
+                  <p className="text-lg font-bold text-green-600">{loan.paid_emis}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 mb-1">Pending EMIs</p>
+                  <p className="text-lg font-bold text-orange-600">{loan.pending_emis}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Borrower Information */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-4">Borrower Information</h4>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <User className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{loan.borrower_name}</p>
+                  <p className="text-sm text-gray-600">Loan Borrower</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Next EMI Information */}
+          {loan.next_due_date && !isCompleted && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-4">Next EMI</h4>
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-orange-900">
+                      Due Date: {formatDate(loan.next_due_date)}
+                    </p>
+                    <p className="text-xs text-orange-700 mt-1">
+                      Amount: {formatCurrency(loan.next_due_amount)}
+                    </p>
+                  </div>
+                  <Calendar className="h-6 w-6 text-orange-600" />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="border-t border-gray-200 px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 h-10"
+            >
+              Close
+            </Button>
+            {!isCompleted && (
+              <Button
+                onClick={() => {
+                  onClose();
+                  onRecordPayment(loan.id);
+                }}
+                className="flex-1 h-10"
+              >
+                <Receipt className="h-4 w-4 mr-2" />
+                Record Payment
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LenderLoansPage() {
   const router = useRouter();
   const { user, isLender, initialized, isAuthenticated } = useAuth();
+// Modal state
+const [selectedLoanForDetails, setSelectedLoanForDetails] = React.useState<LoanSummary | null>(null);
+const [showLoanDetailsModal, setShowLoanDetailsModal] = React.useState(false);
 
   const [loans, setLoans] = React.useState<LoanSummary[]>([]);
   const [filteredLoans, setFilteredLoans] = React.useState<LoanSummary[]>([]);
@@ -226,10 +457,16 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
     router.push(`/dashboard/lender?mode=record-payment&loan=${loanId}`);
   };
 
-  const handleViewDetails = (loanId: string) => {
-    console.log('View loan details:', loanId);
-    // TODO: Navigate to loan details page
+  const handleViewDetails = (loan: LoanSummary) => {
+    setSelectedLoanForDetails(loan);
+    setShowLoanDetailsModal(true);
   };
+
+  // Add this new handler for modal's record payment button
+const handleRecordPaymentFromModal = (loanId: string) => {
+  setShowLoanDetailsModal(false);
+  router.push(`/dashboard/lender?mode=record-payment&loan=${loanId}`);
+};
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -386,28 +623,37 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-   {filteredLoans.map((loan) => (
-  <UnifiedLoanCard
-    key={loan.id}
-    loan={loan}
-    onRecordPayment={(loanId) => handleRecordPayment(loanId)}
-    onViewDetails={(loan) => handleViewDetails(loan.id)}
-    formatCurrency={formatCurrency}
-    formatDate={formatDate}
-  />
-))}
-              
-              {/* Load More (if needed for pagination) */}
-              {filteredLoans.length >= 20 && (
-                <div className="text-center py-6">
-                  <button className="text-blue-600 hover:text-blue-700 font-medium">
-                    Load More Loans
-                  </button>
-                </div>
-              )}
-            </div>
+            {filteredLoans.map((loan) => (
+              <UnifiedLoanCard
+                key={loan.id}
+                loan={loan}
+                onRecordPayment={(loanId) => handleRecordPayment(loanId)}
+                onViewDetails={(loan) => handleViewDetails(loan)} // ✅ Pass the loan object, not ID
+                formatCurrency={formatCurrency}
+                formatDate={formatDate}
+              />
+            ))}
+            
+            {/* Load More (if needed for pagination) */}
+            {filteredLoans.length >= 20 && (
+              <div className="text-center py-6">
+                <button className="text-blue-600 hover:text-blue-700 font-medium">
+                  Load More Loans
+                </button>
+              </div>
+            )}
+          </div>
           )}
         </div>
+      {/* Modal */}
+      <LoanDetailsModal
+          loan={selectedLoanForDetails}
+          isOpen={showLoanDetailsModal}
+          onClose={() => setShowLoanDetailsModal(false)}
+          onRecordPayment={handleRecordPaymentFromModal}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+        />
       </div>
     </DashboardLayout>
   );
