@@ -70,9 +70,9 @@ export default function DashboardLayout({
     },
     {
       icon: Users,
-      label: 'Borrowers',
-      href: '/dashboard/lender/borrowers',
-      isActive: pathname.startsWith('/dashboard/lender/borrowers')
+      label: 'Analytics',
+      href: '/dashboard/lender/analytics',
+      isActive: pathname.startsWith('/dashboard/lender/analytics')
     },
     {
       icon: Zap,

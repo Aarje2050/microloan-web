@@ -67,7 +67,6 @@ interface BorrowerAnalytics {
   total_interest_paid: number
   total_principal_due: number
   total_principal_paid: number
-  total_outstanding: number
   first_loan_date: string
   last_payment_date: string | null
   payment_consistency: number // percentage
@@ -115,23 +114,25 @@ function AnalyticsCard({
 
   return (
     <Card className="bg-white border border-gray-200 hover:shadow-md transition-shadow">
-      <CardContent className="p-6">
+      <CardContent className="p-3 sm:p-6">
         <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', colorClasses[color])}>
-                <Icon className="h-5 w-5" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-2 sm:space-x-3 mb-2 sm:mb-3">
+              <div className={cn('w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center', colorClasses[color])}>
+                <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">{title}</p>
-                {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">{title}</p>
+                {subtitle && <p className="text-xs text-gray-500 truncate">{subtitle}</p>}
               </div>
             </div>
             {loading ? (
-              <div className="h-8 bg-gray-200 rounded animate-pulse w-24"></div>
+              <div className="h-6 sm:h-8 bg-gray-200 rounded animate-pulse w-16 sm:w-24"></div>
             ) : (
               <div className="space-y-1">
-                <p className="text-2xl font-bold text-gray-900">{value}</p>
+                <p className="text-lg sm:text-2xl font-bold text-gray-900 truncate" title={value.toString()}>
+                  {value}
+                </p>
                 {trend && (
                   <div className={cn(
                     'flex items-center text-xs font-medium',
@@ -175,7 +176,65 @@ function MonthlyAnalyticsTable({ monthlyData, loading }: MonthlyAnalyticsTablePr
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto">
+      {/* Mobile Card View */}
+      <div className="block lg:hidden space-y-4">
+        {displayData.map((month) => (
+          <Card key={month.monthKey} className="border border-gray-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-gray-900">{month.month}</h3>
+                  <p className="text-xs text-gray-500">{month.emisDue + month.emisPaid} EMIs</p>
+                </div>
+                <Badge className={cn(
+                  month.collectionRate >= 80 ? 'bg-green-100 text-green-800' :
+                  month.collectionRate >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                )}>
+                  {month.collectionRate >= 80 ? 'Excellent' :
+                   month.collectionRate >= 60 ? 'Good' : 'Needs Attention'}
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                <div>
+                  <p className="text-gray-500 font-medium text-xs">Total EMI</p>
+                  <p className="font-bold text-gray-900">{formatCurrency(month.totalEMIAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium text-xs">Interest</p>
+                  <p className="font-bold text-green-600">{formatCurrency(month.totalInterestAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium text-xs">Principal</p>
+                  <p className="font-bold text-gray-900">{formatCurrency(month.totalPrincipalAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium text-xs">Collection</p>
+                  <p className="font-bold text-gray-900">{month.collectionRate.toFixed(1)}%</p>
+                </div>
+              </div>
+              
+              <div className="w-full h-3 bg-gray-200 rounded-full">
+                <div 
+                  className={cn(
+                    'h-3 rounded-full transition-all',
+                    month.collectionRate >= 80 ? 'bg-green-500' :
+                    month.collectionRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                  )}
+                  style={{ width: `${Math.min(month.collectionRate, 100)}%` }}
+                ></div>
+              </div>
+              
+              <p className="text-xs text-gray-500 mt-2">
+                {month.emisPaid}/{month.emisDue + month.emisPaid} EMIs paid
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200">
@@ -272,7 +331,7 @@ interface BorrowerAnalyticsTableProps {
 }
 
 function BorrowerAnalyticsTable({ borrowersData, loading, onViewDetails }: BorrowerAnalyticsTableProps) {
-  const [sortField, setSortField] = React.useState<keyof BorrowerAnalytics>('total_outstanding')
+  const [sortField, setSortField] = React.useState<keyof BorrowerAnalytics>('total_amount_borrowed')
   const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('desc')
   const [isExpanded, setIsExpanded] = React.useState(false)
 
@@ -327,7 +386,69 @@ function BorrowerAnalyticsTable({ borrowersData, loading, onViewDetails }: Borro
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto">
+      {/* Mobile Card View */}
+      <div className="block lg:hidden space-y-4">
+        {displayData.map((borrower) => (
+          <Card key={borrower.borrower_id} className="border border-gray-200">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 text-sm">{borrower.borrower_name}</h3>
+                  <p className="text-xs text-gray-500 break-all">{borrower.borrower_email}</p>
+                  <p className="text-xs text-gray-500">{borrower.total_loans} loan{borrower.total_loans !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Badge className={getRiskColor(borrower.risk_level)}>
+                    {borrower.risk_level.toUpperCase()}
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onViewDetails(borrower)}
+                  >
+                    <Eye className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <p className="text-gray-500 font-medium">Total Borrowed</p>
+                  <p className="font-bold text-gray-900">{formatCurrency(borrower.total_amount_borrowed)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Interest Paid</p>
+                  <p className="font-bold text-green-600">{formatCurrency(borrower.total_interest_paid)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">EMI Status</p>
+                  <p className="font-medium text-gray-900">
+                    {borrower.total_emis_paid}/{borrower.total_emis_due + borrower.total_emis_paid}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Payment Rate</p>
+                  <p className="font-medium text-gray-900">{borrower.payment_consistency.toFixed(1)}%</p>
+                </div>
+              </div>
+              
+              <div className="mt-3 w-full h-2 bg-gray-200 rounded-full">
+                <div 
+                  className={cn(
+                    'h-2 rounded-full',
+                    borrower.payment_consistency >= 80 ? 'bg-green-500' :
+                    borrower.payment_consistency >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                  )}
+                  style={{ width: `${Math.min(borrower.payment_consistency, 100)}%` }}
+                ></div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200">
@@ -364,17 +485,6 @@ function BorrowerAnalyticsTable({ borrowersData, loading, onViewDetails }: Borro
                   )}
                 </button>
               </th>
-              <th className="text-right text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">
-                <button
-                  onClick={() => handleSort('total_outstanding')}
-                  className="flex items-center justify-end space-x-1 hover:text-gray-800 w-full"
-                >
-                  <span>Outstanding</span>
-                  {sortField === 'total_outstanding' && (
-                    sortDirection === 'desc' ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />
-                  )}
-                </button>
-              </th>
               <th className="text-center text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">EMI Status</th>
               <th className="text-center text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Risk</th>
               <th className="text-center text-xs font-semibold text-gray-600 uppercase tracking-wider py-3">Actions</th>
@@ -398,17 +508,6 @@ function BorrowerAnalyticsTable({ borrowersData, loading, onViewDetails }: Borro
                   <p className="font-bold text-green-600">{formatCurrency(borrower.total_interest_paid)}</p>
                   <p className="text-xs text-gray-500">
                     Due: {formatCurrency(borrower.total_interest_due - borrower.total_interest_paid)}
-                  </p>
-                </td>
-                <td className="py-4 text-right">
-                  <p className={cn(
-                    "font-bold",
-                    borrower.total_outstanding > 0 ? "text-red-600" : "text-green-600"
-                  )}>
-                    {formatCurrency(borrower.total_outstanding)}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Paid: {formatCurrency(borrower.total_principal_paid)}
                   </p>
                 </td>
                 <td className="py-4 text-center">
@@ -619,35 +718,42 @@ export default function LenderAnalytics() {
     loansData.forEach(loan => {
       const loanEMIs = (emisData || []).filter(e => e.loan_id === loan.id)
       
-      // Calculate loan status
-      const totalEMIs = loanEMIs.length
-      const paidEMIs = loanEMIs.filter(e => (e.paid_amount || 0) >= e.amount).length
-      const hasOverdueEMIs = loanEMIs.some(e => {
-        const dueDate = new Date(e.due_date)
-        const paidAmount = e.paid_amount || 0
-        return dueDate < today && paidAmount < e.amount
-      })
-
-      if (totalEMIs > 0 && paidEMIs === totalEMIs) {
+      // Simplified loan status calculation
+      if (loan.status === 'completed') {
         completedLoans++
-      } else if (hasOverdueEMIs) {
-        overdueLoans++
-      } else if (loan.status === 'active') {
-        activeLoans++
+      } else if (loan.status === 'active' || loan.status === 'disbursed') {
+        // Check if has overdue EMIs
+        const hasOverdueEMIs = loanEMIs.some(e => {
+          const dueDate = new Date(e.due_date)
+          const paidAmount = e.paid_amount || 0
+          return dueDate < today && paidAmount < e.amount
+        })
+        
+        if (hasOverdueEMIs) {
+          overdueLoans++
+        } else {
+          activeLoans++
+        }
+      } else {
+        // Any other status (pending, rejected, etc.)
+        // Don't count in active loans
       }
 
-      // Calculate earnings
+      // Calculate earnings from paid EMIs only
       loanEMIs.forEach(emi => {
         const paidAmount = emi.paid_amount || 0
-        const interestPaid = Math.min(paidAmount, emi.interest_amount || 0)
-        const principalPaid = Math.max(0, paidAmount - (emi.interest_amount || 0))
-        
-        totalInterestEarned += interestPaid
-        totalPrincipalRecovered += principalPaid
+        if (paidAmount > 0) {
+          const interestAmount = emi.interest_amount || 0
+          const interestPaid = Math.min(paidAmount, interestAmount)
+          const principalPaid = Math.max(0, paidAmount - interestAmount)
+          
+          totalInterestEarned += interestPaid
+          totalPrincipalRecovered += principalPaid
+        }
       })
     })
 
-    const averageLoanAmount = totalLoanDisbursed / loansData.length
+    const averageLoanAmount = loansData.length > 0 ? totalLoanDisbursed / loansData.length : 0
     const portfolioHealth = loansData.length > 0 
       ? ((activeLoans + completedLoans) / loansData.length) * 100 
       : 100
@@ -764,8 +870,18 @@ export default function LenderAnalytics() {
       }
     })
 
-    // Sort by month (most recent first)
-    monthlyAnalytics.sort((a, b) => b.monthKey.localeCompare(a.monthKey))
+    // Sort by month - Current month first, then future months chronologically
+    const today = new Date()
+    const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+    
+    monthlyAnalytics.sort((a, b) => {
+      // Current month always comes first
+      if (a.monthKey === currentMonthKey) return -1
+      if (b.monthKey === currentMonthKey) return 1
+      
+      // After current month, sort chronologically (ascending)
+      return a.monthKey.localeCompare(b.monthKey)
+    })
 
     setAnalytics(prev => ({ ...prev, monthly: monthlyAnalytics }))
   }
@@ -891,7 +1007,6 @@ export default function LenderAnalytics() {
         total_interest_paid: totalInterestPaid,
         total_principal_due: totalPrincipalDue,
         total_principal_paid: totalPrincipalPaid,
-        total_outstanding: totalOutstanding,
         first_loan_date: firstLoanDate,
         last_payment_date: lastPaymentDate,
         payment_consistency: paymentConsistency,
@@ -899,8 +1014,8 @@ export default function LenderAnalytics() {
       }
     })
 
-    // Sort by total outstanding (highest first)
-    borrowerAnalytics.sort((a, b) => b.total_outstanding - a.total_outstanding)
+    // Sort by total amount borrowed (highest first)
+    borrowerAnalytics.sort((a, b) => b.total_amount_borrowed - a.total_amount_borrowed)
 
     setAnalytics(prev => ({ ...prev, borrowers: borrowerAnalytics }))
   }
@@ -961,23 +1076,23 @@ export default function LenderAnalytics() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Lender Analytics</h1>
-              <p className="text-sm text-gray-600 mt-2">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Lender Analytics</h1>
+              <p className="text-sm text-gray-600 mt-1 sm:mt-2">
                 Comprehensive insights into your lending portfolio and performance
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+            <div className="flex flex-row space-x-2 sm:space-x-3">
               <Button
                 variant="outline"
                 onClick={handleRefresh}
                 disabled={analytics.loading || analytics.refreshing}
                 size="sm"
-                className="font-medium"
+                className="font-medium flex-1 sm:flex-none"
               >
                 <RefreshCw className={cn(
                   "h-4 w-4 mr-2", 
@@ -989,7 +1104,7 @@ export default function LenderAnalytics() {
                 variant="outline"
                 onClick={handleExportData}
                 size="sm"
-                className="font-medium"
+                className="font-medium flex-1 sm:flex-none"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Export
@@ -1000,19 +1115,19 @@ export default function LenderAnalytics() {
 
         {/* Error Display */}
         {analytics.error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
             <div className="flex items-center space-x-3">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <div>
+              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-semibold text-red-900">Error Loading Analytics</h4>
-                <p className="text-sm text-red-800 mt-1">{analytics.error}</p>
+                <p className="text-sm text-red-800 mt-1 break-words">{analytics.error}</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Overall Analytics Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
           <AnalyticsCard
             title="Total Loan Disbursed"
             value={formatCurrency(analytics.overall.totalLoanDisbursed)}
@@ -1081,17 +1196,17 @@ export default function LenderAnalytics() {
         </div>
 
         {/* Monthly Analytics */}
-        <Card className="bg-white border border-gray-200 mb-8 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Calendar className="h-5 w-5 text-blue-600" />
+        <Card className="bg-white border border-gray-200 mb-6 sm:mb-8 shadow-sm">
+          <CardHeader className="pb-3 sm:pb-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
               <span>Monthly Performance</span>
             </CardTitle>
             <p className="text-sm text-gray-600">
               EMI collections and interest earnings by month
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <MonthlyAnalyticsTable 
               monthlyData={analytics.monthly} 
               loading={analytics.loading} 
@@ -1101,16 +1216,16 @@ export default function LenderAnalytics() {
 
         {/* Borrower Analytics */}
         <Card className="bg-white border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Users className="h-5 w-5 text-green-600" />
+          <CardHeader className="pb-3 sm:pb-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Users className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
               <span>Borrower Performance</span>
             </CardTitle>
             <p className="text-sm text-gray-600">
               Individual borrower analytics and payment history
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <BorrowerAnalyticsTable 
               borrowersData={analytics.borrowers}
               loading={analytics.loading}

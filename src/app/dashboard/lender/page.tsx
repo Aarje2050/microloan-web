@@ -1257,20 +1257,7 @@ export default function LenderDashboard() {
     onClick={handleNavigateToEMIs}
     subtitle="Require attention"
   />
-  <StatsCard
-    title="This Month Earnings"
-    value={formatCurrency(stats.currentMonthEarnings)}
-    icon={TrendingUp}
-    loading={loading.stats}
-    subtitle={`EMIs due in ${new Date().toLocaleDateString('en-US', { month: 'long' })}`}
-  />
-  <StatsCard
-    title="Total Loan Disbursed"
-    value={formatCurrency(stats.totalLoanDisbursed)}
-    icon={DollarSign}
-    loading={loading.stats}
-    subtitle="Total principal amount disbursed"
-  />
+ 
 </div>
 
           {/* Quick Actions */}
