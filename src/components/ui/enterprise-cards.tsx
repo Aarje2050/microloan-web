@@ -133,6 +133,7 @@ export function LoanCard({
                 <Calendar className="w-4 h-4 mr-1" />
                 <span>{formatDate(loan.disbursement_date)}</span>
               </div>
+              
             </div>
           </div>
           

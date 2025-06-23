@@ -106,6 +106,10 @@ export function UnifiedLoanCard({
                 <Calendar className="w-4 h-4 mr-1" />
                 <span>{formatDate(loan.disbursement_date)}</span>
               </div>
+              <div className="flex items-center">
+                <Calendar className="w-4 h-4 mr-1" />
+                <span>{loan.interest_rate}%</span>
+              </div>
             </div>
           </div>
           

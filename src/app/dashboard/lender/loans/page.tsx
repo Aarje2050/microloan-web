@@ -276,6 +276,7 @@ const [showLoanDetailsModal, setShowLoanDetailsModal] = React.useState(false);
   const [sortOption, setSortOption] = React.useState<SortOption>('newest');
   const [showFilters, setShowFilters] = React.useState(false);
 
+
   console.log("💳 LENDER LOANS - State:", {
     user: user?.email,
     loansCount: loans.length,
@@ -414,6 +415,8 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
     borrower_name: borrower?.full_name || "Unknown",
     principal_amount: loan.principal_amount,
     total_amount: loan.total_amount || loan.principal_amount,
+    interest_rate: loan.interest_rate || 0, // Include interest rate
+    interest_tenure: loan.interest_tenure || "N/A", // Include interest tenure
     status: loan.status,
     disbursement_date: loan.disbursement_date || loan.created_at,
     pending_emis: pendingEMIs.length + partialEMIs.length,

@@ -1257,7 +1257,6 @@ export default function LenderDashboard() {
     onClick={handleNavigateToEMIs}
     subtitle="Require attention"
   />
- 
 </div>
 
           {/* Quick Actions */}
