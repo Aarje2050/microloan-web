@@ -19,7 +19,8 @@ import {
   Bell,
   Search,
   BarChart3,
-  IndianRupee
+  IndianRupee,
+  Trash2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -95,6 +96,13 @@ export default function DesktopSidebar({
       icon: TrendingUp,
       label: 'Analytics',
       href: '/dashboard/lender/analytics',
+      color: 'primary'
+    },
+
+    {
+      icon: Trash2,
+      label: 'Trash',
+      href: '/dashboard/lender/trash',
       color: 'primary'
     }
   ]
