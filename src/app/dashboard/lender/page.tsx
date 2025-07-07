@@ -1,4 +1,4 @@
-// app/dashboard/lender/page.tsx - PROFESSIONAL LENDER DASHBOARD WITH MONTHLY INTEREST
+// app/dashboard/lender/page.tsx - PROFESSIONAL LENDER DASHBOARD WITH DELETE FUNCTIONALITY
 "use client";
 
 import React from "react";
@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import DashboardLayout from "@/components/layout/dashboard-layout";
+import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
 import {
   Users,
   CreditCard,
@@ -24,7 +25,9 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
-  Clock
+  Clock,
+  AlertTriangle,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +37,7 @@ import CreateLoanForm from "@/components/forms/loan/create-loan-form";
 import RecordPaymentForm from "@/components/forms/loan/record-payment-form";
 import { UnifiedLoanCard } from "@/components/ui/unified-loan-card";
 import { LoanSummary, calculateLoanStatus } from "@/lib/loan-utils";
+import { moveToTrash } from "@/lib/trash-utils";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 
 interface Borrower {
@@ -53,8 +57,8 @@ interface DashboardStats {
   totalBorrowers: number;
   activeLoans: number;
   dueEmis: number;
-  currentMonthEarnings: number; // EMIs due in current month
-  totalLoanDisbursed: number; // Total loan disbursed
+  currentMonthEarnings: number;
+  totalLoanDisbursed: number;
 }
 
 type ViewMode = "dashboard" | "add-borrower" | "create-loan" | "record-payment";
@@ -112,9 +116,10 @@ interface LoanDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRecordPayment: (loanId: string) => void;
+  onDeleteLoan: (loanId: string) => void;
 }
 
-function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment }: LoanDetailsModalProps) {
+function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment, onDeleteLoan }: LoanDetailsModalProps) {
   if (!isOpen || !loan) return null;
 
   const getStatusColor = (status: string) => {
@@ -128,6 +133,22 @@ function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment }: LoanDetail
   };
 
   const progressPercentage = loan.total_emis > 0 ? (loan.paid_emis / loan.total_emis) * 100 : 0;
+
+  // Format interest rate with tenure
+  const formatInterestRate = (rate: number, tenure: string) => {
+    if (!rate) return 'Not specified';
+    
+    let unit = 'per year';
+    if (tenure && tenure.toLowerCase().includes('month')) {
+      unit = 'per month';
+    } else if (tenure && tenure.toLowerCase().includes('week')) {
+      unit = 'per week';
+    } else if (tenure && tenure.toLowerCase().includes('day')) {
+      unit = 'per day';
+    }
+    
+    return `${rate}% ${unit}`;
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -208,6 +229,25 @@ function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment }: LoanDetail
                 </div>
                 <p className="text-lg font-bold text-gray-900">{formatDate(loan.disbursement_date)}</p>
               </div>
+            </div>
+          </div>
+
+          {/* Interest Rate Information */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-4">Interest Details</h4>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <TrendingUp className="h-4 w-4 text-blue-600" />
+                <span className="text-xs font-medium text-blue-700 uppercase tracking-wider">Interest Rate</span>
+              </div>
+              <p className="text-xl font-bold text-blue-900">
+                {formatInterestRate(loan.interest_rate || 0, loan.interest_tenure || '')}
+              </p>
+              {loan.interest_tenure && (
+                <p className="text-sm text-blue-700 mt-1">
+                  Tenure: {loan.interest_tenure}
+                </p>
+              )}
             </div>
           </div>
 
@@ -308,6 +348,21 @@ function LoanDetailsModal({ loan, isOpen, onClose, onRecordPayment }: LoanDetail
             >
               Close
             </Button>
+            
+            {/* Delete Button */}
+            <Button
+  variant="outline"
+  onClick={() => {
+    onClose();
+    onDeleteLoan(loan.id);
+  }}
+  className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+>
+  <Trash2 className="h-4 w-4 mr-2" />
+  Move to Trash
+</Button>
+
+            {/* Record Payment Button */}
             {loan.status === 'active' && (
               <Button
                 onClick={() => {
@@ -616,13 +671,17 @@ export default function LenderDashboard() {
   const [showLoanDetailsModal, setShowLoanDetailsModal] = React.useState(false);
   const [showBorrowerDetailsModal, setShowBorrowerDetailsModal] = React.useState(false);
   
+  // Delete functionality state
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = React.useState(false);
+  const [loanToDelete, setLoanToDelete] = React.useState<LoanSummary | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  
   const [stats, setStats] = React.useState<DashboardStats>({
     totalBorrowers: 0,
     activeLoans: 0,
     dueEmis: 0,
-    currentMonthEarnings: 0, // EMIs due in current month
-    totalLoanDisbursed: 0// Total loan disbursed
-
+    currentMonthEarnings: 0,
+    totalLoanDisbursed: 0
   });
   const [loading, setLoading] = React.useState({
     borrowers: true,
@@ -877,10 +936,11 @@ export default function LenderDashboard() {
       setLoading(prev => ({ ...prev, loans: true, stats: true }));
 
       const { data: loansData, error: loansError } = await supabase
-        .from("loans")
-        .select("*")
-        .eq("created_by", user?.id)
-        .order("created_at", { ascending: false });
+      .from("loans")
+      .select("*")
+      .eq("created_by", user?.id)
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false });
 
       if (loansError) throw loansError;
 
@@ -902,17 +962,18 @@ export default function LenderDashboard() {
 
       const loanIds = loansData.map((l) => l.id);
       const { data: emisData, error: emisError } = await supabase
-        .from("emis")
-        .select("*")
-        .in("loan_id", loanIds)
-        .order("emi_number", { ascending: true });
+      .from("emis")
+      .select("*")
+      .in("loan_id", loanIds)
+      .eq("is_deleted", false)
+      .order("emi_number", { ascending: true });
 
       if (emisError) {
         console.warn("⚠️ LENDER - EMIs query warning:", emisError);
       }
 
       let totalDueEmis = 0;
-      let totalLoanDisbursed = 0; // Initialize total loan disbursed
+      let totalLoanDisbursed = 0;
 
       const transformedLoans: LoanSummary[] = loansData.map((loan) => {
         const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
@@ -964,6 +1025,8 @@ export default function LenderDashboard() {
           borrower_name: borrower?.full_name || "Unknown",
           principal_amount: loan.principal_amount,
           total_amount: loan.total_amount || loan.principal_amount,
+          interest_rate: loan.interest_rate || 0,
+          interest_tenure: loan.interest_tenure || "N/A",
           status: loan.status,
           disbursement_date: loan.disbursement_date || loan.created_at,
           pending_emis: pendingEMIs.length + partialEMIs.length,
@@ -976,18 +1039,18 @@ export default function LenderDashboard() {
             : 0,
           purpose: loan.purpose || null,
           notes: loan.notes || null,
-          emis: loanEMIs // Include EMI data for status calculation
+          emis: loanEMIs
         };
 
         // Add principal amount to total loan disbursed
-      totalLoanDisbursed += loan.principal_amount;
+        totalLoanDisbursed += loan.principal_amount;
 
         // Calculate smart status
         const smartStatus = calculateLoanStatus(loanData);
 
         return {
           ...loanData,
-          status: smartStatus // Use calculated status
+          status: smartStatus
         };
       });
 
@@ -1000,8 +1063,7 @@ export default function LenderDashboard() {
         loans: transformedLoans.length, 
         dueEmis: totalDueEmis, 
         currentMonthEarnings: currentMonthEarnings,
-        totalLoanDisbursed: totalLoanDisbursed // Update stats with total loan disbursed
-
+        totalLoanDisbursed: totalLoanDisbursed
       });
 
     } catch (error: unknown) {
@@ -1018,14 +1080,14 @@ export default function LenderDashboard() {
     loans: number;
     dueEmis: number;
     currentMonthEarnings: number;
-    totalLoanDisbursed: number; // Include totalLoanDisbursed
+    totalLoanDisbursed: number;
   }>) => {
     setStats(prev => ({
       totalBorrowers: updates.borrowers ?? prev.totalBorrowers,
       activeLoans: updates.loans ?? prev.activeLoans,
       dueEmis: updates.dueEmis ?? prev.dueEmis,
       currentMonthEarnings: updates.currentMonthEarnings ?? prev.currentMonthEarnings,
-      totalLoanDisbursed: updates.totalLoanDisbursed ?? prev.totalLoanDisbursed, // Include totalLoanDisbursed
+      totalLoanDisbursed: updates.totalLoanDisbursed ?? prev.totalLoanDisbursed,
     }));
   };
 
@@ -1083,6 +1145,59 @@ export default function LenderDashboard() {
   const handleRecordPaymentForLoan = (loanId: string) => {
     setSelectedLoanForPayment(loanId);
     setViewMode("record-payment");
+  };
+
+  // Delete handlers
+  const handleDeleteLoanRequest = (loanId: string) => {
+    const loan = loans.find(l => l.id === loanId);
+    if (loan) {
+      setLoanToDelete(loan);
+      setShowDeleteConfirmation(true);
+    }
+  };
+
+  const handleDeleteLoan = async (loanId: string) => {
+    try {
+      console.log("🗑️ Moving loan to trash:", loanId);
+      
+      await moveToTrash(loanId, user?.id || '');
+      
+      console.log("✅ Loan moved to trash successfully");
+      return true;
+    } catch (error) {
+      console.error("❌ Move to trash error:", error);
+      throw error;
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!loanToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await handleDeleteLoan(loanToDelete.id);
+      
+      // Success - close modal and refresh data
+      setShowDeleteConfirmation(false);
+      setLoanToDelete(null);
+      
+      // Show success message (you can replace with toast if you have one)
+      alert("Loan deleted successfully!");
+      
+      // Refresh the data
+      await loadDashboardData();
+      
+    } catch (error) {
+      // Error handling
+      alert(`Failed to delete loan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirmation(false);
+    setLoanToDelete(null);
   };
 
   // Loading state
@@ -1233,31 +1348,31 @@ export default function LenderDashboard() {
         <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
           {/* Stats Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-  <StatsCard
-    title="Total Borrowers"
-    value={stats.totalBorrowers}
-    icon={Users}
-    loading={loading.borrowers}
-    onClick={handleNavigateToBorrowers}
-    subtitle="Manage contacts"
-  />
-  <StatsCard
-    title="Active Loans"
-    value={stats.activeLoans}
-    icon={CreditCard}
-    loading={loading.loans}
-    onClick={handleNavigateToLoans}
-    subtitle="Portfolio overview"
-  />
-  <StatsCard
-    title="Due EMIs"
-    value={stats.dueEmis}
-    icon={Calendar}
-    loading={loading.stats}
-    onClick={handleNavigateToEMIs}
-    subtitle="Require attention"
-  />
-</div>
+            <StatsCard
+              title="Total Borrowers"
+              value={stats.totalBorrowers}
+              icon={Users}
+              loading={loading.borrowers}
+              onClick={handleNavigateToBorrowers}
+              subtitle="Manage contacts"
+            />
+            <StatsCard
+              title="Active Loans"
+              value={stats.activeLoans}
+              icon={CreditCard}
+              loading={loading.loans}
+              onClick={handleNavigateToLoans}
+              subtitle="Portfolio overview"
+            />
+            <StatsCard
+              title="Due EMIs"
+              value={stats.dueEmis}
+              icon={Calendar}
+              loading={loading.stats}
+              onClick={handleNavigateToEMIs}
+              subtitle="Require attention"
+            />
+          </div>
 
           {/* Quick Actions */}
           <Card className="bg-white border border-gray-200">
@@ -1417,6 +1532,7 @@ export default function LenderDashboard() {
           isOpen={showLoanDetailsModal}
           onClose={() => setShowLoanDetailsModal(false)}
           onRecordPayment={handleRecordPaymentForLoan}
+          onDeleteLoan={handleDeleteLoanRequest}
         />
 
         <BorrowerDetailsModal
@@ -1425,6 +1541,17 @@ export default function LenderDashboard() {
           onClose={() => setShowBorrowerDetailsModal(false)}
           onCreateLoan={handleCreateLoanForBorrower}
         />
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+  isOpen={showDeleteConfirmation}
+  onClose={handleCancelDelete}
+  onConfirm={handleConfirmDelete}
+  isDeleting={isDeleting}
+  title="Move to Trash"
+  message="Are you sure you want to move this loan to trash? You can restore it within 30 days."
+  itemName={loanToDelete?.loan_number}
+/>
       </div>
     </DashboardLayout>
   );

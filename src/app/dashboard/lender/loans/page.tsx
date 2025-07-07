@@ -18,10 +18,12 @@ import {
   Calendar,
   User,
   IndianRupee,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from "lucide-react";
 
 import { LoanSummary, calculateLoanStatus } from '@/lib/loan-utils';
+import { moveToTrash } from '@/lib/trash-utils';
 import { UnifiedLoanCard } from '@/components/ui/unified-loan-card';
 import {
   X,
@@ -282,16 +284,16 @@ function LoanDetailsModal({
             
             {/* Delete Button */}
             <Button
-              variant="outline"
-              onClick={() => {
-                onClose();
-                onDeleteLoan(loan.id);
-              }}
-              className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
-            >
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Delete Loan
-            </Button>
+  variant="outline"
+  onClick={() => {
+    onClose();
+    onDeleteLoan(loan.id);
+  }}
+  className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+>
+  <Trash2 className="h-4 w-4 mr-2" />
+  Move to Trash
+</Button>
 
             {/* Record Payment Button */}
             {!isCompleted && (
@@ -403,10 +405,11 @@ export default function LenderLoansPage() {
       console.log("📊 Loading loans for lender:", user?.id);
 
       const { data: loansData, error: loansError } = await supabase
-        .from("loans")
-        .select("*")
-        .eq("created_by", user?.id)
-        .order("created_at", { ascending: false });
+  .from("loans")
+  .select("*")
+  .eq("created_by", user?.id)
+  .eq("is_deleted", false)
+  .order("created_at", { ascending: false });
 
       if (loansError) throw loansError;
 
@@ -425,9 +428,10 @@ export default function LenderLoansPage() {
       // Get EMI data
       const loanIds = loansData.map(l => l.id);
       const { data: emisData } = await supabase
-        .from("emis")
-        .select("*")
-        .in("loan_id", loanIds);
+  .from("emis")
+  .select("*")
+  .in("loan_id", loanIds)
+  .eq("is_deleted", false);
 
       // Transform loans
       const transformedLoans: LoanSummary[] = loansData.map((loan) => {
@@ -538,55 +542,14 @@ export default function LenderLoansPage() {
 
   const handleDeleteLoan = async (loanId: string) => {
     try {
-      console.log("🗑️ Starting loan deletion process for:", loanId);
+      console.log("🗑️ Moving loan to trash:", loanId);
       
-      // Step 1: Delete all EMIs related to this loan
-      console.log("🗑️ Deleting EMIs for loan:", loanId);
-      const { error: emisError } = await supabase
-        .from('emis')
-        .delete()
-        .eq('loan_id', loanId);
-
-      if (emisError) {
-        console.error("❌ Failed to delete EMIs:", emisError);
-        throw new Error(`Failed to delete EMIs: ${emisError.message}`);
-      }
-
-      console.log("✅ EMIs deleted successfully");
-
-      // Step 2: Delete any payment records (if you have a separate payments table)
-      // Uncomment if you have a payments table:
-      /*
-      console.log("🗑️ Deleting payments for loan:", loanId);
-      const { error: paymentsError } = await supabase
-        .from('payments')
-        .delete()
-        .eq('loan_id', loanId);
-
-      if (paymentsError) {
-        console.error("❌ Failed to delete payments:", paymentsError);
-        throw new Error(`Failed to delete payments: ${paymentsError.message}`);
-      }
-      */
-
-      // Step 3: Delete the loan itself
-      console.log("🗑️ Deleting loan:", loanId);
-      const { error: loanError } = await supabase
-        .from('loans')
-        .delete()
-        .eq('id', loanId)
-        .eq('created_by', user?.id); // Extra security: only delete loans created by current user
-
-      if (loanError) {
-        console.error("❌ Failed to delete loan:", loanError);
-        throw new Error(`Failed to delete loan: ${loanError.message}`);
-      }
-
-      console.log("✅ Loan deleted successfully");
+      await moveToTrash(loanId, user?.id || '');
       
+      console.log("✅ Loan moved to trash successfully");
       return true;
     } catch (error) {
-      console.error("❌ Delete loan error:", error);
+      console.error("❌ Move to trash error:", error);
       throw error;
     }
   };
@@ -812,14 +775,14 @@ export default function LenderLoansPage() {
 
         {/* Delete Confirmation Modal */}
         <DeleteConfirmationModal
-          isOpen={showDeleteConfirmation}
-          onClose={handleCancelDelete}
-          onConfirm={handleConfirmDelete}
-          isDeleting={isDeleting}
-          title="Delete Loan"
-          message="Are you sure you want to delete this loan? This will permanently remove the loan and all its related EMIs and payment records."
-          itemName={loanToDelete?.loan_number}
-        />
+  isOpen={showDeleteConfirmation}
+  onClose={handleCancelDelete}
+  onConfirm={handleConfirmDelete}
+  isDeleting={isDeleting}
+  title="Move to Trash"
+  message="Are you sure you want to move this loan to trash? You can restore it within 30 days."
+  itemName={loanToDelete?.loan_number}
+/>
       </div>
     </DashboardLayout>
   );

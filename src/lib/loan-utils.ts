@@ -1,12 +1,12 @@
-// /lib/loan-utils.ts - UPDATED WITH INTEREST RATE FIELDS
+// /lib/loan-utils.ts - UPDATED WITH TRASH SUPPORT
 export interface LoanSummary {
   id: string;
   loan_number: string;
   borrower_name: string;
   principal_amount: number;
   total_amount: number;
-  interest_rate?: number;        // Added
-  interest_tenure?: string;      // Added
+  interest_rate?: number;
+  interest_tenure?: string;
   status: string;
   disbursement_date: string;
   pending_emis: number;
@@ -17,7 +17,10 @@ export interface LoanSummary {
   next_due_amount: number;
   purpose?: string;
   notes?: string;
-  emis?: Array<{               // Added for status calculation
+  // Trash related fields
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  emis?: Array<{
     due_date: string;
     paid_amount?: number;
     amount: number;
@@ -80,4 +83,32 @@ export function calculateLoanStatus(loan: {
   }
   
   return status; // Fallback to database status
+}
+
+// New function to format trash/deleted date
+export function formatTrashDate(deletedAt: string): string {
+  const deletedDate = new Date(deletedAt);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - deletedDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  const daysLeft = 30 - diffDays;
+  
+  if (daysLeft > 1) {
+    return `${daysLeft} days left`;
+  } else if (daysLeft === 1) {
+    return '1 day left';
+  } else {
+    return 'Expires today';
+  }
+}
+
+// New function to check if loan can be restored
+export function canRestoreLoan(deletedAt: string): boolean {
+  const deletedDate = new Date(deletedAt);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - deletedDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays <= 30;
 }
