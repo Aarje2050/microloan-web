@@ -1,4 +1,4 @@
-// app/dashboard/lender/loans/page.tsx - ENTERPRISE LOANS MANAGEMENT
+// app/dashboard/lender/loans/page.tsx - ENTERPRISE LOANS MANAGEMENT WITH DELETE
 "use client";
 
 import React from "react";
@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import DashboardLayout from "@/components/layout/dashboard-layout";
 import { LoanCard, SectionContainer } from "@/components/ui/enterprise-cards";
 import { FilterBar, StatsBar } from "@/components/ui/filter-bar";
+import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
 import {
   CreditCard,
   Plus,
@@ -16,7 +17,8 @@ import {
   Receipt,
   Calendar,
   User,
-  IndianRupee
+  IndianRupee,
+  AlertTriangle
 } from "lucide-react";
 
 import { LoanSummary, calculateLoanStatus } from '@/lib/loan-utils';
@@ -31,8 +33,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-
-
 type FilterStatus = 'all' | 'active' | 'disbursed' | 'completed' | 'overdue';
 type SortOption = 'newest' | 'oldest' | 'amount-high' | 'amount-low' | 'status';
 
@@ -41,6 +41,7 @@ interface LoanDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRecordPayment: (loanId: string) => void;
+  onDeleteLoan: (loanId: string) => void;
   formatCurrency: (amount: number) => string;
   formatDate: (dateString: string) => string;
 }
@@ -50,6 +51,7 @@ function LoanDetailsModal({
   isOpen, 
   onClose, 
   onRecordPayment, 
+  onDeleteLoan,
   formatCurrency, 
   formatDate 
 }: LoanDetailsModalProps) {
@@ -67,6 +69,23 @@ function LoanDetailsModal({
 
   const progressPercentage = loan.total_emis > 0 ? (loan.paid_emis / loan.total_emis) * 100 : 0;
   const isCompleted = loan.pending_emis === 0;
+
+  // Format interest rate with tenure
+  const formatInterestRate = (rate: number, tenure: string) => {
+    if (!rate) return 'Not specified';
+    
+    // Determine the unit based on tenure or default to yearly
+    let unit = 'per year';
+    if (tenure && tenure.toLowerCase().includes('month')) {
+      unit = 'per month';
+    } else if (tenure && tenure.toLowerCase().includes('week')) {
+      unit = 'per week';
+    } else if (tenure && tenure.toLowerCase().includes('day')) {
+      unit = 'per day';
+    }
+    
+    return `${rate}% ${unit}`;
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -141,6 +160,25 @@ function LoanDetailsModal({
                 </div>
                 <p className="text-lg font-bold text-gray-900">{formatDate(loan.disbursement_date)}</p>
               </div>
+            </div>
+          </div>
+
+          {/* Interest Rate Information */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-4">Interest Details</h4>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <TrendingUp className="h-4 w-4 text-blue-600" />
+                <span className="text-xs font-medium text-blue-700 uppercase tracking-wider">Interest Rate</span>
+              </div>
+              <p className="text-xl font-bold text-blue-900">
+                {formatInterestRate(loan.interest_rate || 0, loan.interest_tenure || '')}
+              </p>
+              {loan.interest_tenure && (
+                <p className="text-sm text-blue-700 mt-1">
+                  Tenure: {loan.interest_tenure}
+                </p>
+              )}
             </div>
           </div>
 
@@ -241,6 +279,21 @@ function LoanDetailsModal({
             >
               Close
             </Button>
+            
+            {/* Delete Button */}
+            <Button
+              variant="outline"
+              onClick={() => {
+                onClose();
+                onDeleteLoan(loan.id);
+              }}
+              className="flex-1 h-10 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Delete Loan
+            </Button>
+
+            {/* Record Payment Button */}
             {!isCompleted && (
               <Button
                 onClick={() => {
@@ -263,9 +316,15 @@ function LoanDetailsModal({
 export default function LenderLoansPage() {
   const router = useRouter();
   const { user, isLender, initialized, isAuthenticated } = useAuth();
-// Modal state
-const [selectedLoanForDetails, setSelectedLoanForDetails] = React.useState<LoanSummary | null>(null);
-const [showLoanDetailsModal, setShowLoanDetailsModal] = React.useState(false);
+
+  // Modal state
+  const [selectedLoanForDetails, setSelectedLoanForDetails] = React.useState<LoanSummary | null>(null);
+  const [showLoanDetailsModal, setShowLoanDetailsModal] = React.useState(false);
+
+  // Delete functionality state
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = React.useState(false);
+  const [loanToDelete, setLoanToDelete] = React.useState<LoanSummary | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const [loans, setLoans] = React.useState<LoanSummary[]>([]);
   const [filteredLoans, setFilteredLoans] = React.useState<LoanSummary[]>([]);
@@ -275,7 +334,6 @@ const [showLoanDetailsModal, setShowLoanDetailsModal] = React.useState(false);
   const [filterStatus, setFilterStatus] = React.useState<FilterStatus>('all');
   const [sortOption, setSortOption] = React.useState<SortOption>('newest');
   const [showFilters, setShowFilters] = React.useState(false);
-
 
   console.log("💳 LENDER LOANS - State:", {
     user: user?.email,
@@ -372,74 +430,72 @@ const [showLoanDetailsModal, setShowLoanDetailsModal] = React.useState(false);
         .in("loan_id", loanIds);
 
       // Transform loans
-  // Replace the transformedLoans mapping in /app/dashboard/lender/page.tsx loadLoans function
+      const transformedLoans: LoanSummary[] = loansData.map((loan) => {
+        const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
+        const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
 
-const transformedLoans: LoanSummary[] = loansData.map((loan) => {
-  const borrower = borrowersData?.find((b) => b.id === loan.borrower_id);
-  const loanEMIs = (emisData || []).filter((e) => e.loan_id === loan.id);
+        const totalEMIs = loanEMIs.length;
+        const paidEMIs = loanEMIs.filter((e) => {
+          const paidAmount = e.paid_amount || 0;
+          return paidAmount >= e.amount;
+        }).length;
 
-  const totalEMIs = loanEMIs.length;
-  const paidEMIs = loanEMIs.filter((e) => {
-    const paidAmount = e.paid_amount || 0;
-    return paidAmount >= e.amount;
-  }).length;
+        const partialEMIs = loanEMIs.filter((e) => {
+          const paidAmount = e.paid_amount || 0;
+          return paidAmount > 0 && paidAmount < e.amount;
+        });
 
-  const partialEMIs = loanEMIs.filter((e) => {
-    const paidAmount = e.paid_amount || 0;
-    return paidAmount > 0 && paidAmount < e.amount;
-  });
+        const pendingEMIs = loanEMIs.filter((e) => {
+          const paidAmount = e.paid_amount || 0;
+          return paidAmount === 0;
+        });
 
-  const pendingEMIs = loanEMIs.filter((e) => {
-    const paidAmount = e.paid_amount || 0;
-    return paidAmount === 0;
-  });
+        const totalPaid = loanEMIs.reduce((sum, emi) => {
+          const paidAmount = emi.paid_amount || 0;
+          return sum + Math.min(paidAmount, emi.amount);
+        }, 0);
 
-  const totalPaid = loanEMIs.reduce((sum, emi) => {
-    const paidAmount = emi.paid_amount || 0;
-    return sum + Math.min(paidAmount, emi.amount);
-  }, 0);
+        const outstandingBalance = Math.max(
+          0,
+          (loan.total_amount || loan.principal_amount) - totalPaid
+        );
 
-  const outstandingBalance = Math.max(
-    0,
-    (loan.total_amount || loan.principal_amount) - totalPaid
-  );
+        const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
+          (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+        );
+        const nextDueEMI = unpaidEMIs[0];
 
-  const unpaidEMIs = [...partialEMIs, ...pendingEMIs].sort(
-    (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
-  );
-  const nextDueEMI = unpaidEMIs[0];
+        const loanData = {
+          id: loan.id,
+          loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
+          borrower_name: borrower?.full_name || "Unknown",
+          principal_amount: loan.principal_amount,
+          total_amount: loan.total_amount || loan.principal_amount,
+          interest_rate: loan.interest_rate || 0,
+          interest_tenure: loan.interest_tenure || "N/A",
+          status: loan.status,
+          disbursement_date: loan.disbursement_date || loan.created_at,
+          pending_emis: pendingEMIs.length + partialEMIs.length,
+          total_emis: totalEMIs,
+          paid_emis: paidEMIs,
+          outstanding_balance: outstandingBalance,
+          next_due_date: nextDueEMI?.due_date || null,
+          next_due_amount: nextDueEMI
+            ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0)
+            : 0,
+          purpose: loan.purpose || null,
+          notes: loan.notes || null,
+          emis: loanEMIs
+        };
 
-  const loanData = {
-    id: loan.id,
-    loan_number: loan.loan_number || `LOAN-${loan.id.slice(0, 8)}`,
-    borrower_name: borrower?.full_name || "Unknown",
-    principal_amount: loan.principal_amount,
-    total_amount: loan.total_amount || loan.principal_amount,
-    interest_rate: loan.interest_rate || 0, // Include interest rate
-    interest_tenure: loan.interest_tenure || "N/A", // Include interest tenure
-    status: loan.status,
-    disbursement_date: loan.disbursement_date || loan.created_at,
-    pending_emis: pendingEMIs.length + partialEMIs.length,
-    total_emis: totalEMIs,
-    paid_emis: paidEMIs,
-    outstanding_balance: outstandingBalance,
-    next_due_date: nextDueEMI?.due_date || null,
-    next_due_amount: nextDueEMI
-      ? nextDueEMI.amount - (nextDueEMI.paid_amount || 0)
-      : 0,
-    purpose: loan.purpose || null,     // ✅ Added
-    notes: loan.notes || null,         // ✅ Added
-    emis: loanEMIs // Include EMI data for status calculation
-  };
+        // Calculate smart status
+        const smartStatus = calculateLoanStatus(loanData);
 
-  // Calculate smart status
-  const smartStatus = calculateLoanStatus(loanData);
-
-  return {
-    ...loanData,
-    status: smartStatus // ✅ Use calculated status
-  };
-});
+        return {
+          ...loanData,
+          status: smartStatus
+        };
+      });
 
       setLoans(transformedLoans);
     } catch (error) {
@@ -466,10 +522,104 @@ const transformedLoans: LoanSummary[] = loansData.map((loan) => {
   };
 
   // Add this new handler for modal's record payment button
-const handleRecordPaymentFromModal = (loanId: string) => {
-  setShowLoanDetailsModal(false);
-  router.push(`/dashboard/lender?mode=record-payment&loan=${loanId}`);
-};
+  const handleRecordPaymentFromModal = (loanId: string) => {
+    setShowLoanDetailsModal(false);
+    router.push(`/dashboard/lender?mode=record-payment&loan=${loanId}`);
+  };
+
+  // Delete handlers
+  const handleDeleteLoanRequest = (loanId: string) => {
+    const loan = loans.find(l => l.id === loanId);
+    if (loan) {
+      setLoanToDelete(loan);
+      setShowDeleteConfirmation(true);
+    }
+  };
+
+  const handleDeleteLoan = async (loanId: string) => {
+    try {
+      console.log("🗑️ Starting loan deletion process for:", loanId);
+      
+      // Step 1: Delete all EMIs related to this loan
+      console.log("🗑️ Deleting EMIs for loan:", loanId);
+      const { error: emisError } = await supabase
+        .from('emis')
+        .delete()
+        .eq('loan_id', loanId);
+
+      if (emisError) {
+        console.error("❌ Failed to delete EMIs:", emisError);
+        throw new Error(`Failed to delete EMIs: ${emisError.message}`);
+      }
+
+      console.log("✅ EMIs deleted successfully");
+
+      // Step 2: Delete any payment records (if you have a separate payments table)
+      // Uncomment if you have a payments table:
+      /*
+      console.log("🗑️ Deleting payments for loan:", loanId);
+      const { error: paymentsError } = await supabase
+        .from('payments')
+        .delete()
+        .eq('loan_id', loanId);
+
+      if (paymentsError) {
+        console.error("❌ Failed to delete payments:", paymentsError);
+        throw new Error(`Failed to delete payments: ${paymentsError.message}`);
+      }
+      */
+
+      // Step 3: Delete the loan itself
+      console.log("🗑️ Deleting loan:", loanId);
+      const { error: loanError } = await supabase
+        .from('loans')
+        .delete()
+        .eq('id', loanId)
+        .eq('created_by', user?.id); // Extra security: only delete loans created by current user
+
+      if (loanError) {
+        console.error("❌ Failed to delete loan:", loanError);
+        throw new Error(`Failed to delete loan: ${loanError.message}`);
+      }
+
+      console.log("✅ Loan deleted successfully");
+      
+      return true;
+    } catch (error) {
+      console.error("❌ Delete loan error:", error);
+      throw error;
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!loanToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await handleDeleteLoan(loanToDelete.id);
+      
+      // Success - close modal and refresh data
+      setShowDeleteConfirmation(false);
+      setLoanToDelete(null);
+      
+      // Show success message (you can replace with toast if you have one)
+      alert("Loan deleted successfully!");
+      
+      // Refresh the data
+      await loadLoans();
+      
+    } catch (error) {
+      // Error handling
+      alert(`Failed to delete loan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirmation(false);
+    setLoanToDelete(null);
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -626,36 +776,49 @@ const handleRecordPaymentFromModal = (loanId: string) => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredLoans.map((loan) => (
-              <UnifiedLoanCard
-                key={loan.id}
-                loan={loan}
-                onRecordPayment={(loanId) => handleRecordPayment(loanId)}
-                onViewDetails={(loan) => handleViewDetails(loan)} // ✅ Pass the loan object, not ID
-                formatCurrency={formatCurrency}
-                formatDate={formatDate}
-              />
-            ))}
-            
-            {/* Load More (if needed for pagination) */}
-            {filteredLoans.length >= 20 && (
-              <div className="text-center py-6">
-                <button className="text-blue-600 hover:text-blue-700 font-medium">
-                  Load More Loans
-                </button>
-              </div>
-            )}
-          </div>
+              {filteredLoans.map((loan) => (
+                <UnifiedLoanCard
+                  key={loan.id}
+                  loan={loan}
+                  onRecordPayment={(loanId) => handleRecordPayment(loanId)}
+                  onViewDetails={(loan) => handleViewDetails(loan)}
+                  formatCurrency={formatCurrency}
+                  formatDate={formatDate}
+                />
+              ))}
+              
+              {/* Load More (if needed for pagination) */}
+              {filteredLoans.length >= 20 && (
+                <div className="text-center py-6">
+                  <button className="text-blue-600 hover:text-blue-700 font-medium">
+                    Load More Loans
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
-      {/* Modal */}
-      <LoanDetailsModal
+
+        {/* Loan Details Modal */}
+        <LoanDetailsModal
           loan={selectedLoanForDetails}
           isOpen={showLoanDetailsModal}
           onClose={() => setShowLoanDetailsModal(false)}
           onRecordPayment={handleRecordPaymentFromModal}
+          onDeleteLoan={handleDeleteLoanRequest}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
+        />
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteConfirmation}
+          onClose={handleCancelDelete}
+          onConfirm={handleConfirmDelete}
+          isDeleting={isDeleting}
+          title="Delete Loan"
+          message="Are you sure you want to delete this loan? This will permanently remove the loan and all its related EMIs and payment records."
+          itemName={loanToDelete?.loan_number}
         />
       </div>
     </DashboardLayout>

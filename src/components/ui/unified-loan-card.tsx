@@ -1,4 +1,4 @@
-// /components/ui/unified-loan-card.tsx
+// /components/ui/unified-loan-card.tsx - UPDATED WITH INTEREST RATE
 'use client'
 
 import React from 'react'
@@ -12,7 +12,8 @@ import {
   User,
   FileText,
   MessageSquare,
-  Receipt
+  Receipt,
+  Percent
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -76,6 +77,23 @@ export function UnifiedLoanCard({
     }
   }
 
+  // Format interest rate with tenure
+  const formatInterestRate = (rate: number, tenure: string) => {
+    if (!rate) return 'Not specified';
+    
+    // Determine the unit based on tenure or default to yearly
+    let unit = 'per year';
+    if (tenure && tenure.toLowerCase().includes('month')) {
+      unit = 'per month';
+    } else if (tenure && tenure.toLowerCase().includes('week')) {
+      unit = 'per week';
+    } else if (tenure && tenure.toLowerCase().includes('day')) {
+      unit = 'per day';
+    }
+    
+    return `${rate}% ${unit}`;
+  };
+
   const statusConfig = getStatusConfig(smartStatus)
   const StatusIcon = statusConfig.icon
   const progressPercentage = loan.total_emis > 0 ? (loan.paid_emis / loan.total_emis) * 100 : 0
@@ -106,10 +124,6 @@ export function UnifiedLoanCard({
                 <Calendar className="w-4 h-4 mr-1" />
                 <span>{formatDate(loan.disbursement_date)}</span>
               </div>
-              <div className="flex items-center">
-                <Calendar className="w-4 h-4 mr-1" />
-                <span>{loan.interest_rate}%</span>
-              </div>
             </div>
           </div>
           
@@ -121,14 +135,27 @@ export function UnifiedLoanCard({
           </button>
         </div>
 
-        {/* Loan Amount */}
-        <div className="mb-4">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-            Loan Amount (Disbursed)
-          </p>
-          <p className="text-xl font-bold text-gray-900">
-            {formatCurrency(loan.principal_amount)}
-          </p>
+        {/* Loan Amount & Interest Rate */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+              Loan Amount (Disbursed)
+            </p>
+            <p className="text-xl font-bold text-gray-900">
+              {formatCurrency(loan.principal_amount)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+              Interest Rate
+            </p>
+            <div className="flex items-center space-x-2">
+              <Percent className="w-4 h-4 text-blue-600" />
+              <p className="text-lg font-bold text-blue-900">
+                {formatInterestRate(loan.interest_rate || 0, loan.interest_tenure || '')}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Purpose and Notes - Compact Inline Display */}
