@@ -1,5 +1,6 @@
-// /components/ui/unified-loan-card.tsx - UPDATED WITH INTEREST RATE
 'use client'
+// /components/ui/unified-loan-card.tsx - UPDATED WITH INTEREST RATE
+
 
 import React from 'react'
 import { 
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LoanSummary, calculateLoanStatus } from '@/lib/loan-utils'
+import { useRouter } from 'next/navigation'
 
 interface UnifiedLoanCardProps {
   loan: LoanSummary
@@ -38,6 +40,7 @@ export function UnifiedLoanCard({
   formatDate,
   className 
 }: UnifiedLoanCardProps) {
+  const router = useRouter()
   
   // Use smart status calculation
   const smartStatus = calculateLoanStatus(loan)
@@ -233,14 +236,14 @@ export function UnifiedLoanCard({
 
         {/* Actions */}
         <div className="flex space-x-3">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onViewDetails(loan)}
-            className="flex-1 h-9 text-sm font-medium"
-          >
-            View Details
-          </Button>
+        <Button
+  size="sm"
+  variant="outline"
+  onClick={() => router.push(`/dashboard/lender/loans/${loan.id}`)} // 👈 Add this navigation
+  className="flex-1 h-9 text-sm font-medium"
+>
+  View Full Details
+</Button>
           <Button
             size="sm"
             onClick={() => onRecordPayment(loan.id)}

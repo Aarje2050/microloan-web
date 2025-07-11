@@ -1,7 +1,7 @@
 // app/dashboard/lender/emis/page.tsx - LENDER EMI MANAGEMENT (Borrower EMI Tracking)
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -77,16 +77,135 @@ interface LenderEMI {
   total_payable: number
   priority_level: 'high' | 'medium' | 'low'
 }
+interface MarkAsPaidModalProps {
+  emi: LenderEMI | null
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: (emi: LenderEMI, paymentMethod: string, notes: string) => Promise<void>
+}
+
+function MarkAsPaidModal({ emi, isOpen, onClose, onConfirm }: MarkAsPaidModalProps) {
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [notes, setNotes] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!emi) return
+
+    setIsLoading(true)
+    try {
+      await onConfirm(emi, paymentMethod, notes)
+      onClose()
+      setPaymentMethod('cash')
+      setNotes('')
+    } catch (error) {
+      console.error('Failed to mark as paid:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (!isOpen || !emi) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl max-w-md w-full shadow-xl">
+        <div className="border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">Mark EMI as Paid</h3>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+              <X className="h-5 w-5 text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6">
+          <div className="space-y-4">
+            {/* EMI Info */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="font-semibold text-gray-900">EMI #{emi.emi_number}</p>
+              <p className="text-sm text-gray-600">{emi.borrower_name}</p>
+              <p className="text-lg font-bold text-green-600">{formatCurrency(emi.amount)}</p>
+            </div>
+
+            {/* Payment Method */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Method *
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="cash">Cash</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="cheque">Cheque</option>
+                <option value="upi">UPI</option>
+                <option value="online">Online Transfer</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notes (Optional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Add any notes about this payment..."
+              />
+            </div>
+
+            {/* Warning */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800">
+                <strong>Note:</strong> This will mark the EMI as paid and create a payment record. 
+                Make sure the payment has actually been received.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex space-x-3 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              {isLoading ? 'Marking as Paid...' : 'Mark as Paid'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 interface EMIDetailsModalProps {
   emi: LenderEMI | null
   isOpen: boolean
   onClose: () => void
   onContactBorrower: (emi: LenderEMI, method: 'call' | 'email' | 'sms') => void
-  onMarkPaid: (emi: LenderEMI) => void
+  onOpenMarkAsPaidModal: (emi: LenderEMI) => void
+
 }
 
-function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower, onMarkPaid }: EMIDetailsModalProps) {
+function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower,   onOpenMarkAsPaidModal // ✅ ONLY THIS
+}: EMIDetailsModalProps) {
   if (!isOpen || !emi) return null
 
   const getStatusColor = (status: string) => {
@@ -360,14 +479,14 @@ function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower, onMarkPaid }
             {/* Payment Actions */}
             {!emi.is_paid && (
               <div className="flex space-x-3">
-                <Button
-                  onClick={() => onMarkPaid(emi)}
-                  className="flex-1"
-                  size="sm"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Mark as Paid
-                </Button>
+            <Button
+  onClick={() => onOpenMarkAsPaidModal(emi)}
+  className="flex-1"
+  size="sm"
+>
+  <CheckCircle className="h-4 w-4 mr-2" />
+  Mark as Paid
+</Button>
                 <Button
                   variant="outline"
                   className="flex-1"
@@ -594,7 +713,18 @@ export default function LenderEMIManagement() {
   const [actionLoading, setActionLoading] = React.useState<string | null>(null)
   const [isMonthlyOverviewExpanded, setIsMonthlyOverviewExpanded] = React.useState(false)
 
-  
+  // ✅ ADD THE NEW STATE HERE:
+  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = React.useState(false)
+  const [emiToMarkPaid, setEmiToMarkPaid] = React.useState<LenderEMI | null>(null)
+
+  // ✅ SIMPLE HANDLER
+const handleOpenMarkAsPaidModal = (emi: LenderEMI) => {
+  setShowEMIDetails(false);
+  setEmiToMarkPaid(emi);
+  setShowMarkAsPaidModal(true);
+}
+
+
   // Filters and search
   const [searchQuery, setSearchQuery] = React.useState('')
   const [statusFilter, setStatusFilter] = React.useState('all')
@@ -886,36 +1016,72 @@ return Array.from(monthlyDistribution.values()).sort((a, b) => {
         break
     }
   }
+  
+ // ✅ ENHANCED handleMarkPaid with payment method selection:
+const handleMarkPaidWithDetails = async (emi: LenderEMI, paymentMethod: string, notes: string) => {
+  try {
+    setActionLoading(emi.id)
+    console.log('🔄 LENDER EMI MGMT - Marking EMI as paid with details:', emi.id)
 
-  const handleMarkPaid = async (emi: LenderEMI) => {
-    try {
-      setActionLoading(emi.id)
-      console.log('🔄 LENDER EMI MGMT - Marking EMI as paid:', emi.id)
+    const currentDate = new Date().toISOString().split('T')[0]
+    const currentDateTime = new Date().toISOString()
 
-      const { error: updateError } = await supabase
-        .from('emis')
-        .update({
-          paid_amount: emi.amount,
-          paid_date: new Date().toISOString().split('T')[0],
-          status: 'paid',
-          payment_status: 'paid',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', emi.id)
+    // ✅ Create payment record with details
+    const { data: paymentData, error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        loan_id: emi.loan_id,
+        emi_id: emi.id,
+        amount: emi.amount,
+        payment_date: currentDate,
+        payment_method: paymentMethod,
+        payment_status: 'completed',
+        payment_type: 'emi_payment',
+        recorded_by: user?.id,
+        notes: notes || `Manually marked as paid by lender on ${currentDate}`,
+        reference_number: `MANUAL-${emi.loan_number}-${emi.emi_number}-${Date.now()}`,
+        payment_reference: `EMI-${emi.emi_number}`,
+        late_fee_paid: emi.late_fee || 0,
+        penalty_paid: emi.penalty_amount || 0,
+        created_at: currentDateTime,
+        updated_at: currentDateTime
+      })
+      .select()
+      .single()
 
-      if (updateError) throw updateError
+    if (paymentError) throw new Error(`Failed to create payment record: ${paymentError.message}`)
 
-      console.log('✅ LENDER EMI MGMT - EMI marked as paid successfully')
-      setShowEMIDetails(false)
-      await loadLenderEMIs()
+    // ✅ Update EMI table
+    const { error: updateError } = await supabase
+      .from('emis')
+      .update({
+        paid_amount: emi.amount,
+        paid_date: currentDate,
+        status: 'paid',
+        payment_status: 'paid',
+        updated_at: currentDateTime
+      })
+      .eq('id', emi.id)
 
-    } catch (error: any) {
-      console.error('❌ LENDER EMI MGMT - Failed to mark EMI as paid:', error)
-      setError(error.message || 'Failed to mark EMI as paid')
-    } finally {
-      setActionLoading(null)
+    if (updateError) {
+      // Rollback payment
+      await supabase.from('payments').delete().eq('id', paymentData.id)
+      throw new Error(`Failed to update EMI: ${updateError.message}`)
     }
+
+    console.log('✅ EMI marked as paid with payment record')
+    alert(`✅ EMI #${emi.emi_number} marked as paid!\n💰 Payment: ${paymentData.reference_number}`)
+    
+    await loadLenderEMIs()
+
+  } catch (error: any) {
+    console.error('❌ Failed to mark EMI as paid:', error)
+    alert(`❌ Error: ${error.message}`)
+    setError(error.message)
+  } finally {
+    setActionLoading(null)
   }
+}
 
 // Filter and Sort EMIs (including month filter)
 const sortedEMIs = React.useMemo(() => {
@@ -1587,14 +1753,15 @@ const summaryStats = React.useMemo(() => {
           </>
         )}
 
-        {/* EMI Details Modal */}
-        <EMIDetailsModal
-          emi={selectedEMI}
-          isOpen={showEMIDetails}
-          onClose={() => setShowEMIDetails(false)}
-          onContactBorrower={handleContactBorrower}
-          onMarkPaid={handleMarkPaid}
-        />
+<EMIDetailsModal
+  emi={selectedEMI}
+  isOpen={showEMIDetails}
+  onClose={() => setShowEMIDetails(false)}
+  onContactBorrower={handleContactBorrower}
+  onOpenMarkAsPaidModal={handleOpenMarkAsPaidModal} // ✅ ONLY THIS
+/>
+
+        
       </div>
     </DashboardLayout>
   )
