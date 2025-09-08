@@ -37,6 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import UniversalPaymentForm from '@/components/features/payments/universal-payment-form'
 
 // Simple interfaces for lender EMI management
 interface LenderEMI {
@@ -201,10 +202,10 @@ interface EMIDetailsModalProps {
   onClose: () => void
   onContactBorrower: (emi: LenderEMI, method: 'call' | 'email' | 'sms') => void
   onOpenMarkAsPaidModal: (emi: LenderEMI) => void
-
+  onOpenRecordPaymentModal: (emi: LenderEMI) => void
 }
 
-function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower,   onOpenMarkAsPaidModal // ✅ ONLY THIS
+function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower, onOpenMarkAsPaidModal, onOpenRecordPaymentModal
 }: EMIDetailsModalProps) {
   if (!isOpen || !emi) return null
 
@@ -479,14 +480,23 @@ function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower,   onOpenMark
             {/* Payment Actions */}
             {!emi.is_paid && (
               <div className="flex space-x-3">
-            <Button
-  onClick={() => onOpenMarkAsPaidModal(emi)}
-  className="flex-1"
-  size="sm"
->
-  <CheckCircle className="h-4 w-4 mr-2" />
-  Mark as Paid
-</Button>
+                <Button
+                  onClick={() => onOpenRecordPaymentModal(emi)}
+                  className="flex-1"
+                  size="sm"
+                >
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Record Payment
+                </Button>
+                <Button
+                  onClick={() => onOpenMarkAsPaidModal(emi)}
+                  variant="outline"
+                  className="flex-1"
+                  size="sm"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Mark as Paid
+                </Button>
                 <Button
                   variant="outline"
                   className="flex-1"
@@ -508,12 +518,13 @@ interface LenderEMICardProps {
   emi: LenderEMI
   onViewDetails: (emi: LenderEMI) => void
   onQuickContact: (emi: LenderEMI, method: 'call' | 'email') => void
+  onOpenRecordPaymentModal: (emi: LenderEMI) => void
   isSelected: boolean
   onSelect: (emiId: string) => void
   isActionLoading: boolean
 }
 
-function LenderEMICard({ emi, onViewDetails, onQuickContact, isSelected, onSelect, isActionLoading }: LenderEMICardProps) {
+function LenderEMICard({ emi, onViewDetails, onQuickContact, onOpenRecordPaymentModal, isSelected, onSelect, isActionLoading }: LenderEMICardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'paid': return 'bg-green-100 text-green-800'
@@ -663,36 +674,58 @@ function LenderEMICard({ emi, onViewDetails, onQuickContact, isSelected, onSelec
         </div>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-3 gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onViewDetails(emi)}
-            className="h-9 text-xs font-medium border border-gray-200 hover:bg-gray-50"
-          >
-            <Eye className="h-3 w-3 mr-1" />
-            Details
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => onQuickContact(emi, 'call')}
-            disabled={isActionLoading || !emi.borrower_phone}
-            className="h-9 text-xs font-medium bg-gray-900 hover:bg-gray-800 text-white"
-          >
-            <Phone className="h-3 w-3 mr-1" />
-            Call
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onQuickContact(emi, 'email')}
-            disabled={isActionLoading}
-            className="h-9 text-xs font-medium"
-          >
-            <Mail className="h-3 w-3 mr-1" />
-            Email
-          </Button>
-        </div>
+        {!emi.is_paid ? (
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              size="sm"
+              onClick={() => onOpenRecordPaymentModal(emi)}
+              className="h-9 text-xs font-medium bg-green-600 hover:bg-green-700 text-white"
+            >
+              <DollarSign className="h-3 w-3 mr-1" />
+              Record Payment
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onViewDetails(emi)}
+              className="h-9 text-xs font-medium"
+            >
+              <Eye className="h-3 w-3 mr-1" />
+              Details
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onViewDetails(emi)}
+              className="h-9 text-xs font-medium border border-gray-200 hover:bg-gray-50"
+            >
+              <Eye className="h-3 w-3 mr-1" />
+              Details
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => onQuickContact(emi, 'call')}
+              disabled={isActionLoading || !emi.borrower_phone}
+              className="h-9 text-xs font-medium bg-gray-900 hover:bg-gray-800 text-white"
+            >
+              <Phone className="h-3 w-3 mr-1" />
+              Call
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onQuickContact(emi, 'email')}
+              disabled={isActionLoading}
+              className="h-9 text-xs font-medium"
+            >
+              <Mail className="h-3 w-3 mr-1" />
+              Email
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -716,12 +749,69 @@ export default function LenderEMIManagement() {
   // ✅ ADD THE NEW STATE HERE:
   const [showMarkAsPaidModal, setShowMarkAsPaidModal] = React.useState(false)
   const [emiToMarkPaid, setEmiToMarkPaid] = React.useState<LenderEMI | null>(null)
+  
+  // Record Payment Modal State
+  const [showRecordPaymentModal, setShowRecordPaymentModal] = React.useState(false)
+  const [selectedLoanForPayment, setSelectedLoanForPayment] = React.useState<string>('')
 
   // ✅ SIMPLE HANDLER
 const handleOpenMarkAsPaidModal = (emi: LenderEMI) => {
   setShowEMIDetails(false);
   setEmiToMarkPaid(emi);
   setShowMarkAsPaidModal(true);
+}
+
+// Record Payment Handler
+const handleOpenRecordPaymentModal = (emi: LenderEMI) => {
+  setShowEMIDetails(false);
+  setSelectedLoanForPayment(emi.loan_id);
+  setShowRecordPaymentModal(true);
+}
+
+// Mark as Paid Handler
+const handleMarkAsPaid = async (emi: LenderEMI, paymentMethod: string, notes: string) => {
+  try {
+    setActionLoading(emi.id);
+    
+    // Update EMI status to paid
+    const { error } = await supabase
+      .from('emis')
+      .update({
+        status: 'paid',
+        payment_status: 'paid',
+        paid_amount: emi.amount,
+        paid_date: new Date().toISOString().split('T')[0],
+        days_overdue: 0
+      })
+      .eq('id', emi.id);
+
+    if (error) throw error;
+
+    // Create payment record
+    const { error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        loan_id: emi.loan_id,
+        emi_id: emi.id,
+        amount: emi.amount,
+        payment_date: new Date().toISOString().split('T')[0],
+        payment_method: paymentMethod,
+        notes: notes || null,
+        recorded_by: user?.id,
+        payment_status: 'completed',
+        payment_type: 'emi_payment'
+      });
+
+    if (paymentError) throw paymentError;
+
+    // Refresh EMIs
+    await loadLenderEMIs();
+    
+  } catch (error) {
+    console.error('Error marking EMI as paid:', error);
+  } finally {
+    setActionLoading(null);
+  }
 }
 
 
@@ -872,6 +962,7 @@ return Array.from(monthlyDistribution.values()).sort((a, b) => {
         .from('loans')
         .select('id, loan_number, borrower_id, principal_amount, interest_rate, tenure_value, tenure_unit, status')
         .eq('created_by', user.id)
+        .eq('is_deleted', false) // Only show non-deleted loans
 
       if (loansError) throw loansError
 
@@ -883,11 +974,13 @@ return Array.from(monthlyDistribution.values()).sort((a, b) => {
 
       const loanIds = loansData.map(l => l.id)
 
-      // Get EMIs for these loans
+      // Get EMIs for these loans - EXCLUDE SOFT-DELETED RECORDS
       const { data: emisData, error: emisError } = await supabase
         .from('emis')
         .select('*')
         .in('loan_id', loanIds)
+        .eq('is_deleted', false) // Only show non-deleted EMIs
+        .is('deleted_at', null) // Double check for soft-deleted records
         .order('due_date', { ascending: true })
 
       if (emisError) throw emisError
@@ -1684,6 +1777,7 @@ const summaryStats = React.useMemo(() => {
                   emi={emi}
                   onViewDetails={handleViewDetails}
                   onQuickContact={handleQuickContact}
+                  onOpenRecordPaymentModal={handleOpenRecordPaymentModal}
                   isSelected={selectedEMIs.includes(emi.id)}
                   onSelect={toggleEMISelection}
                   isActionLoading={actionLoading === emi.id}
@@ -1758,9 +1852,43 @@ const summaryStats = React.useMemo(() => {
   isOpen={showEMIDetails}
   onClose={() => setShowEMIDetails(false)}
   onContactBorrower={handleContactBorrower}
-  onOpenMarkAsPaidModal={handleOpenMarkAsPaidModal} // ✅ ONLY THIS
+  onOpenMarkAsPaidModal={handleOpenMarkAsPaidModal}
+  onOpenRecordPaymentModal={handleOpenRecordPaymentModal}
 />
 
+        {/* Record Payment Modal */}
+        {showRecordPaymentModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+              <UniversalPaymentForm
+                loanId={selectedLoanForPayment}
+                onSuccess={(paymentId) => {
+                  setShowRecordPaymentModal(false)
+                  setSelectedLoanForPayment('')
+                  loadLenderEMIs() // Refresh the EMIs list
+                }}
+                onCancel={() => {
+                  setShowRecordPaymentModal(false)
+                  setSelectedLoanForPayment('')
+                }}
+                variant="modal"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Mark as Paid Modal */}
+        {showMarkAsPaidModal && emiToMarkPaid && (
+          <MarkAsPaidModal
+            emi={emiToMarkPaid}
+            isOpen={showMarkAsPaidModal}
+            onClose={() => {
+              setShowMarkAsPaidModal(false)
+              setEmiToMarkPaid(null)
+            }}
+            onConfirm={handleMarkAsPaid}
+          />
+        )}
         
       </div>
     </DashboardLayout>

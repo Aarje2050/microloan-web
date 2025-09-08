@@ -16,6 +16,7 @@ interface RecordPaymentFormProps {
   emiId?: string
   onSuccess?: (paymentId: string) => void
   onCancel?: () => void
+  variant?: 'modal' | 'page' | 'inline'
 }
 
 interface LoanDetails {
@@ -74,7 +75,7 @@ interface PaymentCalculation {
   total_pending_interest: number // 🔧 FIXED: Only DUE interest
 }
 
-export default function RecordPaymentForm({ loanId, emiId, onSuccess, onCancel }: RecordPaymentFormProps) {
+export default function RecordPaymentForm({ loanId, emiId, onSuccess, onCancel, variant = 'page' }: RecordPaymentFormProps) {
   const { user } = useAuth()
   
   // State management
@@ -1099,7 +1100,7 @@ export default function RecordPaymentForm({ loanId, emiId, onSuccess, onCancel }
   // Loading state
   if (isLoadingData) {
     return (
-      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className={`${variant === 'modal' ? 'max-w-4xl mx-auto' : 'max-w-5xl mx-auto'} bg-white rounded-lg shadow-lg p-6`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading payment details...</p>
@@ -1111,25 +1112,27 @@ export default function RecordPaymentForm({ loanId, emiId, onSuccess, onCancel }
   // No loan selected state
   if (!loanDetails) {
     return (
-      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className={`${variant === 'modal' ? 'max-w-4xl mx-auto' : 'max-w-5xl mx-auto'} bg-white rounded-lg shadow-lg p-6`}>
         <div className="text-center">
           <Receipt className="h-12 w-12 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Loan Selected</h3>
           <p className="text-gray-600 mb-4">Please select a loan to record payments.</p>
-          <button 
-            onClick={onCancel}
-            className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
-          </button>
+          {onCancel && (
+            <button 
+              onClick={onCancel}
+              className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </button>
+          )}
         </div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-lg">
+    <div className={`${variant === 'modal' ? 'max-w-4xl mx-auto' : 'max-w-5xl mx-auto'} bg-white rounded-lg shadow-lg`}>
       {/* 🔧 ENHANCED Header */}
       <div className="bg-green-600 text-white p-6 rounded-t-lg">
         <div className="flex items-center justify-between">

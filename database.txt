@@ -284,3 +284,18 @@
 | loan_schedules      | loan_id         | loans         | id            |
 | payments            | emi_id          | emis          | id            |
 | loans               | lender_id       | users         | id            |
+
+
+
+MODIFICATIONS : 
+
+-- Add missing foreign key constraints (ONLY if no orphaned records)
+ALTER TABLE emis 
+ADD CONSTRAINT fk_emis_loan_id 
+FOREIGN KEY (loan_id) REFERENCES loans(id) 
+ON DELETE CASCADE;
+
+ALTER TABLE payments 
+ADD CONSTRAINT fk_payments_loan_id 
+FOREIGN KEY (loan_id) REFERENCES loans(id) 
+ON DELETE CASCADE;

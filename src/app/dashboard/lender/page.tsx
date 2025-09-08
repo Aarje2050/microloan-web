@@ -39,6 +39,7 @@ import { UnifiedLoanCard } from "@/components/ui/unified-loan-card";
 import { LoanSummary, calculateLoanStatus } from "@/lib/loan-utils";
 import { moveToTrash } from "@/lib/trash-utils";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import UniversalPaymentForm from '@/components/features/payments/universal-payment-form';
 
 interface Borrower {
   id: string;
@@ -962,11 +963,12 @@ export default function LenderDashboard() {
 
       const loanIds = loansData.map((l) => l.id);
       const { data: emisData, error: emisError } = await supabase
-      .from("emis")
-      .select("*")
-      .in("loan_id", loanIds)
-      .eq("is_deleted", false)
-      .order("emi_number", { ascending: true });
+        .from("emis")
+        .select("*")
+        .in("loan_id", loanIds)
+        .eq("is_deleted", false) // Only show non-deleted EMIs
+        .is("deleted_at", null) // Double check for soft-deleted records
+        .order("emi_number", { ascending: true });
 
       if (emisError) {
         console.warn("⚠️ LENDER - EMIs query warning:", emisError);
@@ -1292,30 +1294,16 @@ export default function LenderDashboard() {
   if (viewMode === "record-payment") {
     return (
       <DashboardLayout>
-        <div className="max-w-3xl mx-auto p-6">
-          <div className="mb-6">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setViewMode("dashboard");
-                setSelectedLoanForPayment("");
-                router.replace('/dashboard/lender');
-              }}
-              size="sm"
-            >
-              ← Back to Dashboard
-            </Button>
-          </div>
-          <RecordPaymentForm
-            loanId={selectedLoanForPayment}
-            onSuccess={handleRecordPaymentSuccess}
-            onCancel={() => {
-              setViewMode("dashboard");
-              setSelectedLoanForPayment("");
-              router.replace('/dashboard/lender');
-            }}
-          />
-        </div>
+        <UniversalPaymentForm
+          loanId={selectedLoanForPayment}
+          onSuccess={handleRecordPaymentSuccess}
+          onCancel={() => {
+            setViewMode("dashboard");
+            setSelectedLoanForPayment("");
+            router.replace('/dashboard/lender');
+          }}
+          variant="page"
+        />
       </DashboardLayout>
     );
   }
@@ -1406,8 +1394,7 @@ export default function LenderDashboard() {
 
                 <button
                   onClick={() => setViewMode("record-payment")}
-                  disabled={loans.length === 0}
-                  className="flex items-center justify-center p-4 sm:p-6 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center p-4 sm:p-6 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group"
                 >
                   <div className="text-center">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3 group-hover:scale-105 transition-transform">

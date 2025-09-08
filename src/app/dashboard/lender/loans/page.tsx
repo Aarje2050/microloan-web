@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import UniversalPaymentForm from '@/components/features/payments/universal-payment-form';
 
 type FilterStatus = 'all' | 'active' | 'disbursed' | 'completed' | 'overdue';
 type SortOption = 'newest' | 'oldest' | 'amount-high' | 'amount-low' | 'status';
@@ -336,6 +337,10 @@ export default function LenderLoansPage() {
   const [filterStatus, setFilterStatus] = React.useState<FilterStatus>('all');
   const [sortOption, setSortOption] = React.useState<SortOption>('newest');
   const [showFilters, setShowFilters] = React.useState(false);
+  
+  // Add state for payment form
+  const [showPaymentForm, setShowPaymentForm] = React.useState(false)
+  const [selectedLoanForPayment, setSelectedLoanForPayment] = React.useState<string>('')
 
   console.log("💳 LENDER LOANS - State:", {
     user: user?.email,
@@ -425,13 +430,14 @@ export default function LenderLoansPage() {
         .select("id, full_name")
         .in("id", borrowerIds);
 
-      // Get EMI data
+      // Get EMI data - EXCLUDE SOFT-DELETED RECORDS
       const loanIds = loansData.map(l => l.id);
       const { data: emisData } = await supabase
-  .from("emis")
-  .select("*")
-  .in("loan_id", loanIds)
-  .eq("is_deleted", false);
+        .from("emis")
+        .select("*")
+        .in("loan_id", loanIds)
+        .eq("is_deleted", false) // Only show non-deleted EMIs
+        .is("deleted_at", null); // Double check for soft-deleted records
 
       // Transform loans
       const transformedLoans: LoanSummary[] = loansData.map((loan) => {
@@ -517,8 +523,9 @@ export default function LenderLoansPage() {
   };
 
   const handleRecordPayment = (loanId: string) => {
-    router.push(`/dashboard/lender?mode=record-payment&loan=${loanId}`);
-  };
+    setSelectedLoanForPayment(loanId)
+    setShowPaymentForm(true)
+  }
 
   const handleViewDetails = (loan: LoanSummary) => {
     setSelectedLoanForDetails(loan);
@@ -772,6 +779,27 @@ export default function LenderLoansPage() {
           formatCurrency={formatCurrency}
           formatDate={formatDate}
         />
+
+        {/* Payment Form Modal */}
+        {showPaymentForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+              <UniversalPaymentForm
+                loanId={selectedLoanForPayment}
+                onSuccess={(paymentId) => {
+                  setShowPaymentForm(false)
+                  setSelectedLoanForPayment('')
+                  loadLoans() // Refresh the loans list
+                }}
+                onCancel={() => {
+                  setShowPaymentForm(false)
+                  setSelectedLoanForPayment('')
+                }}
+                variant="modal"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Delete Confirmation Modal */}
         <DeleteConfirmationModal
