@@ -105,6 +105,7 @@ export function UnifiedLoanCard({
   return (
     <Card className={cn(
       'bg-white border border-gray-200 hover:shadow-md transition-all duration-200 group',
+      isCompleted && 'opacity-75 bg-gray-50',
       className
     )}>
       <CardContent className="p-6">
@@ -229,32 +230,37 @@ export function UnifiedLoanCard({
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
             <div className="flex items-center justify-center space-x-2">
               <CheckCircle2 className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-medium text-green-800">Loan Fully Paid</span>
+              <span className="text-sm font-medium text-green-800">
+                {loan.settlement_date ? 'Loan Settled' : 'Loan Fully Paid'}
+              </span>
             </div>
+            {loan.settlement_date && (
+              <p className="text-xs text-green-700 text-center mt-1">
+                Settled on {formatDate(loan.settlement_date)}
+              </p>
+            )}
           </div>
         )}
 
         {/* Actions */}
         <div className="flex space-x-3">
-        <Button
-  size="sm"
-  variant="outline"
-  onClick={() => router.push(`/dashboard/lender/loans/${loan.id}`)} // 👈 Add this navigation
-  className="flex-1 h-9 text-sm font-medium"
->
-  View Full Details
-</Button>
           <Button
             size="sm"
-            onClick={() => onRecordPayment(loan.id)}
-            disabled={isCompleted}
-            className={cn(
-              "flex-1 h-9 text-sm font-medium",
-              isCompleted && "opacity-50 cursor-not-allowed"
-            )}
+            variant="outline"
+            onClick={() => router.push(`/dashboard/lender/loans/${loan.id}`)}
+            className="flex-1 h-9 text-sm font-medium"
           >
-            {isCompleted ? "Fully Paid" : "Record Payment"}
+            {isCompleted ? "View History" : "View Details"}
           </Button>
+          {!isCompleted && (
+            <Button
+              size="sm"
+              onClick={() => onRecordPayment(loan.id)}
+              className="flex-1 h-9 text-sm font-medium"
+            >
+              Record Payment
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

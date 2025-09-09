@@ -15,6 +15,7 @@ import {
   DollarSign,
   Clock,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   AlertTriangle,
   X,
@@ -200,17 +201,17 @@ interface EMIDetailsModalProps {
   emi: LenderEMI | null
   isOpen: boolean
   onClose: () => void
-  onContactBorrower: (emi: LenderEMI, method: 'call' | 'email' | 'sms') => void
-  onOpenMarkAsPaidModal: (emi: LenderEMI) => void
   onOpenRecordPaymentModal: (emi: LenderEMI) => void
+  onViewLoan: (loanId: string) => void
 }
 
-function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower, onOpenMarkAsPaidModal, onOpenRecordPaymentModal
+function EMIDetailsModal({ emi, isOpen, onClose, onOpenRecordPaymentModal, onViewLoan
 }: EMIDetailsModalProps) {
   if (!isOpen || !emi) return null
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'settled': return 'bg-green-100 text-green-800 border-green-200'
       case 'paid': return 'bg-green-100 text-green-800 border-green-200'
       case 'overdue': return 'bg-red-100 text-red-800 border-red-200'
       case 'upcoming': return 'bg-blue-100 text-blue-800 border-blue-200'
@@ -443,70 +444,26 @@ function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower, onOpenMarkAs
 
         {/* Actions */}
         <div className="border-t border-gray-200 px-6 py-4">
-          <div className="flex flex-col space-y-3">
-            {/* Contact Actions */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Contact Borrower</h4>
-              <div className="grid grid-cols-3 gap-3">
-                <Button
-                  onClick={() => onContactBorrower(emi, 'call')}
-                  size="sm"
-                  className="flex-1"
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => onContactBorrower(emi, 'email')}
-                  size="sm"
-                  className="flex-1"
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  Email
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => onContactBorrower(emi, 'sms')}
-                  size="sm"
-                  className="flex-1"
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  SMS
-                </Button>
-              </div>
-            </div>
-
-            {/* Payment Actions */}
+          <div className="flex space-x-3">
             {!emi.is_paid && (
-              <div className="flex space-x-3">
-                <Button
-                  onClick={() => onOpenRecordPaymentModal(emi)}
-                  className="flex-1"
-                  size="sm"
-                >
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Record Payment
-                </Button>
-                <Button
-                  onClick={() => onOpenMarkAsPaidModal(emi)}
-                  variant="outline"
-                  className="flex-1"
-                  size="sm"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Mark as Paid
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  size="sm"
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  View Loan
-                </Button>
-              </div>
+              <Button
+                onClick={() => onOpenRecordPaymentModal(emi)}
+                className="flex-1"
+                size="sm"
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                Record Payment
+              </Button>
             )}
+            <Button
+              onClick={() => onViewLoan(emi.loan_id)}
+              variant="outline"
+              className="flex-1"
+              size="sm"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              View Loan
+            </Button>
           </div>
         </div>
       </div>
@@ -517,16 +474,16 @@ function EMIDetailsModal({ emi, isOpen, onClose, onContactBorrower, onOpenMarkAs
 interface LenderEMICardProps {
   emi: LenderEMI
   onViewDetails: (emi: LenderEMI) => void
-  onQuickContact: (emi: LenderEMI, method: 'call' | 'email') => void
   onOpenRecordPaymentModal: (emi: LenderEMI) => void
   isSelected: boolean
   onSelect: (emiId: string) => void
   isActionLoading: boolean
 }
 
-function LenderEMICard({ emi, onViewDetails, onQuickContact, onOpenRecordPaymentModal, isSelected, onSelect, isActionLoading }: LenderEMICardProps) {
+function LenderEMICard({ emi, onViewDetails, onOpenRecordPaymentModal, isSelected, onSelect, isActionLoading }: LenderEMICardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'settled': return 'bg-green-100 text-green-800'
       case 'paid': return 'bg-green-100 text-green-800'
       case 'overdue': return 'bg-red-100 text-red-800'
       case 'upcoming': return 'bg-blue-100 text-blue-800'
@@ -539,6 +496,7 @@ function LenderEMICard({ emi, onViewDetails, onQuickContact, onOpenRecordPayment
 
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'settled': return <CheckCircle2 className="h-3 w-3" />
       case 'paid': return <CheckCircle className="h-3 w-3" />
       case 'overdue': return <AlertTriangle className="h-3 w-3" />
       case 'upcoming': return <Clock className="h-3 w-3" />
@@ -695,7 +653,7 @@ function LenderEMICard({ emi, onViewDetails, onQuickContact, onOpenRecordPayment
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="flex justify-center">
             <Button
               size="sm"
               variant="ghost"
@@ -704,25 +662,6 @@ function LenderEMICard({ emi, onViewDetails, onQuickContact, onOpenRecordPayment
             >
               <Eye className="h-3 w-3 mr-1" />
               Details
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => onQuickContact(emi, 'call')}
-              disabled={isActionLoading || !emi.borrower_phone}
-              className="h-9 text-xs font-medium bg-gray-900 hover:bg-gray-800 text-white"
-            >
-              <Phone className="h-3 w-3 mr-1" />
-              Call
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onQuickContact(emi, 'email')}
-              disabled={isActionLoading}
-              className="h-9 text-xs font-medium"
-            >
-              <Mail className="h-3 w-3 mr-1" />
-              Email
             </Button>
           </div>
         )}
@@ -766,6 +705,12 @@ const handleOpenRecordPaymentModal = (emi: LenderEMI) => {
   setShowEMIDetails(false);
   setSelectedLoanForPayment(emi.loan_id);
   setShowRecordPaymentModal(true);
+}
+
+// View Loan Handler
+const handleViewLoan = (loanId: string) => {
+  setShowEMIDetails(false);
+  router.push(`/dashboard/lender/loans/${loanId}`);
 }
 
 // Mark as Paid Handler
@@ -863,8 +808,10 @@ const handleMarkAsPaid = async (emi: LenderEMI, paymentMethod: string, notes: st
     const dueDate = new Date(emi.due_date)
     const daysDiff = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     const isPaid = (emi.paid_amount || 0) >= emi.amount
+    const isSettled = emi.payment_status === 'settled'
     const isPartiallyPaid = (emi.paid_amount || 0) > 0 && (emi.paid_amount || 0) < emi.amount
     
+    if (isSettled) return 'settled'
     if (isPaid) return 'paid'
     if (isPartiallyPaid) return 'partial'
     if (daysDiff < 0) return 'overdue'
@@ -901,7 +848,7 @@ const getEMIsByMonth = React.useMemo(() => {
     monthData.count++
     monthData.totalAmount += emi.amount
     
-    if (emi.calculated_status === 'paid') {
+    if (emi.calculated_status === 'paid' || emi.calculated_status === 'settled') {
       monthData.paidCount++
     } else if (emi.calculated_status === 'overdue') {
       monthData.overdueCount++
@@ -1088,27 +1035,6 @@ return Array.from(monthlyDistribution.values()).sort((a, b) => {
   }
 
   // Contact borrower actions
-  const handleContactBorrower = (emi: LenderEMI, method: 'call' | 'email' | 'sms') => {
-    console.log(`📞 LENDER EMI MGMT - Contact ${emi.borrower_name} via ${method}`)
-    
-    switch (method) {
-      case 'call':
-        if (emi.borrower_phone) {
-          window.open(`tel:${emi.borrower_phone}`)
-        } else {
-          alert('No phone number available for this borrower')
-        }
-        break
-      case 'email':
-        const subject = `EMI Payment Reminder - ${emi.loan_number}`
-        const body = `Dear ${emi.borrower_name},\n\nThis is a reminder that your EMI #${emi.emi_number} of ${formatCurrency(emi.amount)} is ${emi.is_overdue ? `overdue by ${emi.days_overdue} days` : `due on ${formatDate(emi.due_date)}`}.\n\nPlease make the payment at your earliest convenience.\n\nThank you.`
-        window.open(`mailto:${emi.borrower_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`)
-        break
-      case 'sms':
-        alert(`SMS functionality for ${emi.borrower_name} - To be implemented`)
-        break
-    }
-  }
   
  // ✅ ENHANCED handleMarkPaid with payment method selection:
 const handleMarkPaidWithDetails = async (emi: LenderEMI, paymentMethod: string, notes: string) => {
@@ -1328,9 +1254,6 @@ React.useEffect(() => {
     setShowEMIDetails(true)
   }
 
-  const handleQuickContact = (emi: LenderEMI, method: 'call' | 'email') => {
-    handleContactBorrower(emi, method)
-  }
 
   // Selection handlers
   const toggleEMISelection = (emiId: string) => {
@@ -1352,7 +1275,7 @@ React.useEffect(() => {
   // Calculate summary stats
 const summaryStats = React.useMemo(() => {
   const totalEMIs = sortedEMIs.length // ✅ CHANGE HERE
-  const paidEMIs = sortedEMIs.filter(e => e.calculated_status === 'paid').length // ✅ CHANGE HERE
+  const paidEMIs = sortedEMIs.filter(e => e.calculated_status === 'paid' || e.calculated_status === 'settled').length // ✅ CHANGE HERE
   const overdueEMIs = sortedEMIs.filter(e => e.calculated_status === 'overdue').length // ✅ CHANGE HERE
   const dueTodayEMIs = sortedEMIs.filter(e => e.calculated_status === 'due_today').length // ✅ CHANGE HERE
   const dueSoonEMIs = sortedEMIs.filter(e => e.calculated_status === 'due_soon').length // ✅ CHANGE HERE
@@ -1776,7 +1699,6 @@ const summaryStats = React.useMemo(() => {
                   key={emi.id}
                   emi={emi}
                   onViewDetails={handleViewDetails}
-                  onQuickContact={handleQuickContact}
                   onOpenRecordPaymentModal={handleOpenRecordPaymentModal}
                   isSelected={selectedEMIs.includes(emi.id)}
                   onSelect={toggleEMISelection}
@@ -1851,9 +1773,8 @@ const summaryStats = React.useMemo(() => {
   emi={selectedEMI}
   isOpen={showEMIDetails}
   onClose={() => setShowEMIDetails(false)}
-  onContactBorrower={handleContactBorrower}
-  onOpenMarkAsPaidModal={handleOpenMarkAsPaidModal}
   onOpenRecordPaymentModal={handleOpenRecordPaymentModal}
+  onViewLoan={handleViewLoan}
 />
 
         {/* Record Payment Modal */}

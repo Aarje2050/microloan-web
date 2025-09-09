@@ -299,3 +299,19 @@ ALTER TABLE payments
 ADD CONSTRAINT fk_payments_loan_id 
 FOREIGN KEY (loan_id) REFERENCES loans(id) 
 ON DELETE CASCADE;
+
+
+
+Modifications : 
+
+-- Add settlement fields to loans table
+ALTER TABLE loans ADD COLUMN settlement_date TIMESTAMP;
+ALTER TABLE loans ADD COLUMN settlement_amount DECIMAL(15,2);
+ALTER TABLE loans ADD COLUMN settlement_notes TEXT;
+
+-- Add settlement fields to payments table
+ALTER TABLE payments ADD COLUMN is_settlement BOOLEAN DEFAULT FALSE;
+ALTER TABLE payments ADD COLUMN settlement_type VARCHAR(20);
+
+-- Add settlement fields to emis table
+ALTER TABLE emis ADD COLUMN settlement_notes TEXT;

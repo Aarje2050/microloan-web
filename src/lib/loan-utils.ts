@@ -20,6 +20,10 @@ export interface LoanSummary {
   // Trash related fields
   is_deleted?: boolean;
   deleted_at?: string | null;
+  // Settlement related fields
+  settlement_date?: string | null;
+  settlement_amount?: number;
+  settlement_notes?: string;
   emis?: Array<{
     due_date: string;
     paid_amount?: number;
@@ -36,6 +40,8 @@ export function calculateLoanStatus(loan: {
   pending_emis: number;
   disbursement_date: string | null;
   next_due_date: string | null;
+  settlement_date?: string | null;
+  settlement_type?: string;
   emis?: Array<{
     due_date: string;
     paid_amount?: number;
@@ -43,7 +49,17 @@ export function calculateLoanStatus(loan: {
   }>;
 }) {
   const today = new Date();
-  const { outstanding_balance, total_emis, paid_emis, status, disbursement_date, emis } = loan;
+  const { outstanding_balance, total_emis, paid_emis, status, disbursement_date, settlement_date, emis } = loan;
+  
+  // If loan has been settled, always return completed
+  if (settlement_date) {
+    return 'completed';
+  }
+  
+  // If database status is completed, respect it
+  if (status === 'completed') {
+    return 'completed';
+  }
   
   // If fully paid (no outstanding balance and all EMIs paid)
   if (outstanding_balance <= 0 && total_emis > 0 && paid_emis === total_emis) {

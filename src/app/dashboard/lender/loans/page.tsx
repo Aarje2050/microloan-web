@@ -36,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import UniversalPaymentForm from '@/components/features/payments/universal-payment-form';
 
-type FilterStatus = 'all' | 'active' | 'disbursed' | 'completed' | 'overdue';
+type FilterStatus = 'all' | 'active' | 'completed' | 'overdue';
 type SortOption = 'newest' | 'oldest' | 'amount-high' | 'amount-low' | 'status';
 
 interface LoanDetailsModalProps {
@@ -338,14 +338,27 @@ export default function LenderLoansPage() {
   const [sortOption, setSortOption] = React.useState<SortOption>('newest');
   const [showFilters, setShowFilters] = React.useState(false);
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [itemsPerPage] = React.useState(10);
+  
   // Add state for payment form
   const [showPaymentForm, setShowPaymentForm] = React.useState(false)
   const [selectedLoanForPayment, setSelectedLoanForPayment] = React.useState<string>('')
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredLoans.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentLoans = filteredLoans.slice(startIndex, endIndex);
 
   console.log("💳 LENDER LOANS - State:", {
     user: user?.email,
     loansCount: loans.length,
     filteredCount: filteredLoans.length,
+    currentPage,
+    totalPages,
+    showingLoans: currentLoans.length,
     filterStatus,
     searchQuery
   });
@@ -402,6 +415,7 @@ export default function LenderLoansPage() {
     });
 
     setFilteredLoans(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
   }, [loans, searchQuery, filterStatus, sortOption]);
 
   const loadLoans = async () => {
@@ -612,7 +626,6 @@ export default function LenderLoansPage() {
     const counts = {
       all: loans.length,
       active: loans.filter(l => l.status === 'active').length,
-      disbursed: loans.filter(l => l.status === 'disbursed').length,
       completed: loans.filter(l => l.status === 'completed').length,
       overdue: loans.filter(l => l.status === 'overdue').length,
     };
@@ -654,7 +667,6 @@ export default function LenderLoansPage() {
           stats={[
             { label: "Total", value: statusCounts.all },
             { label: "Active", value: statusCounts.active, color: "green" },
-            { label: "Disbursed", value: statusCounts.disbursed, color: "blue" },
             { label: "Completed", value: statusCounts.completed },
             { label: "Overdue", value: statusCounts.overdue, color: "red" }
           ]}
@@ -672,7 +684,6 @@ export default function LenderLoansPage() {
               options: [
                 { value: 'all', label: 'All Loans', count: statusCounts.all },
                 { value: 'active', label: 'Active', count: statusCounts.active },
-                { value: 'disbursed', label: 'Disbursed', count: statusCounts.disbursed },
                 { value: 'completed', label: 'Completed', count: statusCounts.completed },
                 { value: 'overdue', label: 'Overdue', count: statusCounts.overdue }
               ],
@@ -745,27 +756,62 @@ export default function LenderLoansPage() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredLoans.map((loan) => (
-                <UnifiedLoanCard
-                  key={loan.id}
-                  loan={loan}
-                  onRecordPayment={(loanId) => handleRecordPayment(loanId)}
-                  onViewDetails={(loan) => handleViewDetails(loan)}
-                  formatCurrency={formatCurrency}
-                  formatDate={formatDate}
-                />
-              ))}
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {currentLoans.map((loan) => (
+                  <UnifiedLoanCard
+                    key={loan.id}
+                    loan={loan}
+                    onRecordPayment={(loanId) => handleRecordPayment(loanId)}
+                    onViewDetails={(loan) => handleViewDetails(loan)}
+                    formatCurrency={formatCurrency}
+                    formatDate={formatDate}
+                  />
+                ))}
+              </div>
               
-              {/* Load More (if needed for pagination) */}
-              {filteredLoans.length >= 20 && (
-                <div className="text-center py-6">
-                  <button className="text-blue-600 hover:text-blue-700 font-medium">
-                    Load More Loans
-                  </button>
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="mt-8 flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing {startIndex + 1} to {Math.min(endIndex, filteredLoans.length)} of {filteredLoans.length} loans
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                          className="w-8 h-8 p-0"
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
 

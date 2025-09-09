@@ -17,6 +17,7 @@ import {
   IndianRupee,
   Clock,
   CheckCircle,
+  CheckCircle2,
   AlertTriangle,
   XCircle,
   Download,
@@ -38,6 +39,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import LoanSettlementModal from "@/components/features/loans/loan-settlement-modal";
+import UniversalPaymentForm from "@/components/features/payments/universal-payment-form";
 
 // Types based on your database structure
 interface LoanDetails {
@@ -64,6 +67,9 @@ interface LoanDetails {
   purpose: string;
   current_principal_balance: number;
   is_interest_only: boolean;
+  settlement_date?: string;
+  settlement_amount?: number;
+  settlement_notes?: string;
   created_at: string;
 }
 
@@ -91,6 +97,7 @@ interface EMIDetails {
   outstanding_balance: number;
   payment_status: string;
   days_overdue: number;
+  settlement_notes?: string;
 }
 
 interface PaymentDetails {
@@ -874,6 +881,10 @@ export default function LoanDetailsPage() {
   const [selectedEMIForInvestigation, setSelectedEMIForInvestigation] = useState<EMIDetails | null>(null);
   const [showEMIStatusModal, setShowEMIStatusModal] = useState(false);
   const [showEMIInvestigationModal, setShowEMIInvestigationModal] = useState(false);
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
+  
+  // Payment form state
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   console.log("💳 LOAN DETAILS - Loan ID:", loanId, "User:", user?.email);
 
@@ -1023,6 +1034,113 @@ export default function LoanDetailsPage() {
     });
   };
 
+  const recalculateEMIs = async (loanData: Partial<LoanDetails>) => {
+    try {
+      console.log("🔄 Recalculating EMIs for loan:", loanId);
+
+      // Calculate new EMI details
+      const principal = loanData.principal_amount || 0;
+      const interestRate = loanData.interest_rate || 0;
+      const tenureValue = loanData.tenure_value || 0;
+      const tenureUnit = loanData.tenure_unit || 'months';
+      const repaymentFrequency = loanData.repayment_frequency || 'monthly';
+
+      // Convert tenure to months for calculation
+      let tenureInMonths = tenureValue;
+      if (tenureUnit === 'weeks') {
+        tenureInMonths = tenureValue / 4.33; // Approximate weeks to months
+      } else if (tenureUnit === 'days') {
+        tenureInMonths = tenureValue / 30; // Approximate days to months
+      } else if (tenureUnit === 'years') {
+        tenureInMonths = tenureValue * 12;
+      }
+
+      // Calculate EMI based on repayment frequency
+      let totalEMIs = tenureInMonths;
+      if (repaymentFrequency === 'weekly') {
+        totalEMIs = tenureValue * 4.33; // Approximate weeks in tenure
+      } else if (repaymentFrequency === 'daily') {
+        totalEMIs = tenureValue; // Daily payments
+      }
+
+      const monthlyRate = interestRate / 100 / 12;
+      const emiAmount = principal * (monthlyRate * Math.pow(1 + monthlyRate, tenureInMonths)) / 
+                       (Math.pow(1 + monthlyRate, tenureInMonths) - 1);
+
+      // Get current EMIs to preserve payment status
+      const { data: currentEMIs, error: fetchError } = await supabase
+        .from('emis')
+        .select('*')
+        .eq('loan_id', loanId)
+        .order('due_date', { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      // Delete existing EMIs
+      const { error: deleteError } = await supabase
+        .from('emis')
+        .delete()
+        .eq('loan_id', loanId);
+
+      if (deleteError) throw deleteError;
+
+      // Create new EMIs
+      const newEMIs = [];
+      const startDate = new Date(loan?.disbursement_date || new Date());
+      
+      for (let i = 0; i < totalEMIs; i++) {
+        const dueDate = new Date(startDate);
+        
+        if (repaymentFrequency === 'weekly') {
+          dueDate.setDate(startDate.getDate() + (i * 7));
+        } else if (repaymentFrequency === 'daily') {
+          dueDate.setDate(startDate.getDate() + i);
+        } else {
+          // Monthly
+          dueDate.setMonth(startDate.getMonth() + i);
+        }
+
+        // Check if this EMI was already paid
+        const existingEMI = currentEMIs?.[i];
+        const isPaid = existingEMI?.payment_status === 'paid' || existingEMI?.payment_status === 'settled';
+        const paidAmount = isPaid ? emiAmount : 0;
+        const paidDate = isPaid ? existingEMI?.paid_date : null;
+        const paymentStatus = isPaid ? existingEMI?.payment_status : 'pending';
+        const status = isPaid ? 'paid' : 'pending';
+
+        newEMIs.push({
+          loan_id: loanId,
+          emi_number: i + 1,
+          amount: emiAmount,
+          due_date: dueDate.toISOString(),
+          status: status,
+          payment_status: paymentStatus,
+          paid_amount: paidAmount,
+          paid_date: paidDate,
+          late_fee: 0,
+          penalty_amount: 0,
+          days_overdue: 0,
+          settlement_notes: existingEMI?.settlement_notes || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      }
+
+      // Insert new EMIs
+      const { error: insertError } = await supabase
+        .from('emis')
+        .insert(newEMIs);
+
+      if (insertError) throw insertError;
+
+      console.log("✅ EMIs recalculated and updated successfully");
+      
+    } catch (error) {
+      console.error("❌ Failed to recalculate EMIs:", error);
+      throw error;
+    }
+  };
+
   const handleSaveLoan = async (updatedLoanData: Partial<LoanDetails>) => {
     try {
       console.log("💾 Updating loan:", loanId, updatedLoanData);
@@ -1052,8 +1170,11 @@ export default function LoanDetailsPage() {
 
       console.log("✅ Loan updated successfully");
       
+      // Recalculate and update EMIs
+      await recalculateEMIs(updatedLoanData);
+      
       // Show success message
-      alert("Loan updated successfully!");
+      alert("Loan updated successfully! EMIs have been recalculated.");
       
       // Reload loan details to show updated data
       await loadLoanDetails();
@@ -1098,14 +1219,110 @@ export default function LoanDetailsPage() {
     }
   };
 
+  const handleSettleLoan = async (settlementData: {
+    settlementAmount: number;
+    settlementDate: string;
+    notes: string;
+    paymentMethod: string;
+  }) => {
+    if (!loan) return;
+
+    try {
+      console.log("🏦 LENDER - Processing loan settlement:", {
+        loanId: loan.id,
+        amount: settlementData.settlementAmount,
+        date: settlementData.settlementDate
+      });
+
+      // 1. Create settlement payment record
+      const { error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          loan_id: loan.id,
+          amount: settlementData.settlementAmount,
+          payment_date: settlementData.settlementDate,
+          payment_method: settlementData.paymentMethod,
+          payment_status: 'completed',
+          payment_type: 'settlement',
+          recorded_by: user?.id,
+          notes: settlementData.notes || `Loan settled early - ${settlementData.settlementDate}`,
+          reference_number: `SETTLE-${loan.loan_number}-${Date.now()}`,
+          payment_reference: `EARLY-SETTLEMENT`,
+          is_settlement: true,
+          settlement_type: 'full_settlement'
+        });
+
+      if (paymentError) throw paymentError;
+
+      // 2. Update loan status to completed
+      const { error: loanError } = await supabase
+        .from('loans')
+        .update({
+          status: 'completed',
+          settlement_date: settlementData.settlementDate,
+          settlement_amount: settlementData.settlementAmount,
+          settlement_notes: settlementData.notes || `Loan settled early on ${settlementData.settlementDate}`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', loan.id);
+
+      if (loanError) throw loanError;
+
+      // 3. Mark all pending EMIs as paid with settlement status
+      // First, get all pending EMIs to update them individually
+      const { data: pendingEMIs, error: fetchError } = await supabase
+        .from('emis')
+        .select('id, amount')
+        .eq('loan_id', loan.id)
+        .in('status', ['pending', 'partial']);
+
+      if (fetchError) throw fetchError;
+
+      // Update each EMI individually with the correct amount
+      if (pendingEMIs && pendingEMIs.length > 0) {
+        for (const emi of pendingEMIs) {
+          const { error: emiUpdateError } = await supabase
+            .from('emis')
+            .update({
+              status: 'paid',
+              payment_status: 'settled',
+              paid_amount: emi.amount,
+              paid_date: settlementData.settlementDate,
+              settlement_notes: settlementData.notes || `Settled early on ${settlementData.settlementDate}`,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', emi.id);
+
+          if (emiUpdateError) throw emiUpdateError;
+        }
+      }
+
+      // 4. Close modal and refresh data
+      setShowSettlementModal(false);
+      
+      // Show success message
+      alert(`✅ Loan ${loan.loan_number} settled successfully!`);
+      
+      // Reload loan details
+      await loadLoanDetails();
+      
+    } catch (error) {
+      console.error('❌ Settlement error:', error);
+      alert(`❌ Failed to settle loan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const getEMIStatusBadge = (emi: EMIDetails) => {
     const today = new Date();
     const dueDate = new Date(emi.due_date);
     const isPaid = emi.payment_status === 'paid' || emi.paid_amount >= emi.amount;
+    const isSettled = emi.payment_status === 'settled';
     const isPartial = emi.paid_amount > 0 && emi.paid_amount < emi.amount;
     const isOverdue = dueDate < today && !isPaid;
 
-    if (isPaid) {
+    if (isSettled) {
+      return <Badge className="bg-green-100 text-green-800"><CheckCircle2 className="w-3 h-3 mr-1" />Settled</Badge>;
+    } else if (isPaid) {
       return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Paid</Badge>;
     } else if (isPartial) {
       return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="w-3 h-3 mr-1" />Partial</Badge>;
@@ -1197,7 +1414,9 @@ export default function LoanDetailsPage() {
                 </Button>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">{loan.loan_number}</h1>
-                  <p className="text-gray-600">Loan Details & Management</p>
+                  <p className="text-gray-600">
+                    {loan.status === 'completed' ? 'Loan History & Settlement Details' : 'Loan Details & Management'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
@@ -1213,10 +1432,25 @@ export default function LoanDetailsPage() {
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Loan
                 </Button>
-                <Button size="sm">
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Record Payment
-                </Button>
+                {loan.status !== 'completed' && (
+                  <Button 
+                    size="sm"
+                    onClick={() => setShowPaymentForm(true)}
+                  >
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Record Payment
+                  </Button>
+                )}
+                {stats && stats.outstandingBalance > 0 && loan.status !== 'completed' && (
+                  <Button 
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => setShowSettlementModal(true)}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Settle Loan
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1288,6 +1522,40 @@ export default function LoanDetailsPage() {
             </Card>
           </div>
 
+          {/* Settlement Information */}
+          {loan.status === 'completed' && loan.settlement_date && (
+            <Card className="mb-6">
+              <CardContent className="p-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <CheckCircle2 className="h-6 w-6 text-green-600" />
+                    <h3 className="text-lg font-semibold text-green-900">Loan Settled</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-green-700">Settlement Date</p>
+                      <p className="font-semibold text-green-900">{formatDate(loan.settlement_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-700">Settlement Amount</p>
+                      <p className="font-semibold text-green-900">{formatCurrency(loan.settlement_amount || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-700">Status</p>
+                      <p className="font-semibold text-green-900">Completed</p>
+                    </div>
+                  </div>
+                  {loan.settlement_notes && (
+                    <div className="mt-3 pt-3 border-t border-green-200">
+                      <p className="text-sm text-green-700">Settlement Notes</p>
+                      <p className="text-sm text-green-800">{loan.settlement_notes}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Progress Bar */}
           <Card className="mb-6">
             <CardContent className="p-4">
@@ -1299,7 +1567,10 @@ export default function LoanDetailsPage() {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div 
-                  className="bg-blue-600 h-3 rounded-full transition-all duration-500"
+                  className={cn(
+                    "h-3 rounded-full transition-all duration-500",
+                    loan.status === 'completed' ? "bg-green-600" : "bg-blue-600"
+                  )}
                   style={{ width: `${progressPercentage}%` }}
                 ></div>
               </div>
@@ -1643,6 +1914,42 @@ export default function LoanDetailsPage() {
             emi={selectedEMIForInvestigation}
             loanId={loanId}
           />
+        )}
+
+        {/* Loan Settlement Modal */}
+        {loan && stats && (
+          <LoanSettlementModal
+            loan={{
+              id: loan.id,
+              loan_number: loan.loan_number,
+              borrower_name: borrower?.full_name || 'Unknown',
+              outstanding_balance: stats.outstandingBalance,
+              pending_emis: stats.upcomingEMIs,
+              total_emis: stats.totalEMIs
+            }}
+            isOpen={showSettlementModal}
+            onClose={() => setShowSettlementModal(false)}
+            onConfirm={handleSettleLoan}
+            formatCurrency={formatCurrency}
+          />
+        )}
+
+        {/* Payment Form Modal */}
+        {showPaymentForm && loan && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+              <UniversalPaymentForm
+                loanId={loan.id}
+                onSuccess={(paymentId) => {
+                  console.log("Payment recorded successfully:", paymentId);
+                  setShowPaymentForm(false);
+                  // Refresh loan data
+                  loadLoanDetails();
+                }}
+                onCancel={() => setShowPaymentForm(false)}
+              />
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>
